@@ -30,14 +30,17 @@ const StaffLogin = () => {
     setLoading(true);
     const res = await staffLogin(username, password);
     setLoading(false);
-    if (!res.ok) { toast.error(res.error); return; }
-    // (TS narrowing) res is now { ok: true; role }
-    if (res.role !== mode) {
-      toast.warning(`Logged in as ${res.role}. Redirecting to your dashboard.`);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    const role = res.role;
+    if (role !== mode) {
+      toast.warning(`Logged in as ${role}. Redirecting to your dashboard.`);
     } else {
       toast.success(`Welcome, ${mode === "admin" ? "Admin" : "Dealer"}!`);
     }
-    navigate(res.role === "admin" ? "/admin" : "/dealer");
+    navigate(role === "admin" ? "/admin" : "/dealer");
   };
 
   const useCred = (u: string, p: string) => { setUsername(u); setPassword(p); };
