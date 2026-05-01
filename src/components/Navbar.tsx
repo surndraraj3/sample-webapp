@@ -23,8 +23,8 @@ export const Navbar = () => {
     { to: "/", label: t("nav.home") },
     { to: "/products", label: t("nav.products") },
     { to: "/about", label: t("nav.about") },
-    { to: "/dealer", label: t("nav.dealer") },
-    { to: "/admin", label: t("nav.admin") },
+    ...(user?.role === "dealer" ? [{ to: "/dealer", label: t("nav.dealer") }] : []),
+    ...(user?.role === "admin" ? [{ to: "/admin", label: t("nav.admin") }, { to: "/dealer", label: t("nav.dealer") }] : []),
   ];
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
