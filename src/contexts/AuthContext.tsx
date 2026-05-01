@@ -1,13 +1,27 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 export type Role = "customer" | "dealer" | "admin";
-export type User = { mobile: string; name?: string; role: Role };
+export type User = {
+  role: Role;
+  name?: string;
+  mobile?: string;   // customers
+  username?: string; // dealers / admin
+  code?: string;     // dealer code
+};
+
+// Demo credentials for staff logins (shown on the staff login screen).
+export const STAFF_CREDENTIALS = [
+  { role: "admin" as Role,  username: "admin",  password: "admin@123",  name: "MSI Admin" },
+  { role: "dealer" as Role, username: "DLR001", password: "dealer@123", name: "Suresh Agro Distributors", code: "DLR001" },
+  { role: "dealer" as Role, username: "DLR002", password: "dealer@123", name: "Krishna Pumps",            code: "DLR002" },
+];
 
 type Ctx = {
   user: User | null;
   isAuthed: boolean;
   sendOtp: (mobile: string) => Promise<void>;
-  verifyOtp: (mobile: string, otp: string, role?: Role) => Promise<boolean>;
+  verifyOtp: (mobile: string, otp: string) => Promise<boolean>;
+  staffLogin: (username: string, password: string) => Promise<{ ok: true; role: Role } | { ok: false; error: string }>;
   logout: () => void;
 };
 
@@ -27,21 +41,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   const sendOtp = async (_mobile: string) => {
-    // Dummy: always succeeds. Real impl would call SMS gateway.
     await new Promise((r) => setTimeout(r, 400));
   };
 
-  const verifyOtp = async (mobile: string, otp: string, role: Role = "customer") => {
+  const verifyOtp = async (mobile: string, otp: string) => {
     await new Promise((r) => setTimeout(r, 300));
     if (otp !== DUMMY_OTP) return false;
-    setUser({ mobile, role, name: `Customer ${mobile.slice(-4)}` });
+    setUser({ role: "customer", mobile, name: `Customer ${mobile.slice(-4)}` });
     return true;
+  };
+
+  const staffLogin = async (
+    username: string,
+    password: string
+  ): Promise<{ ok: true; role: Role } | { ok: false; error: string }> => {
+    await new Promise((r) => setTimeout(r, 350));
+    const match = STAFF_CREDENTIALS.find(
+      (c) => c.username.toLowerCase() === username.trim().toLowerCase() && c.password === password
+    );
+    if (!match) return { ok: false, error: "Invalid username or password" };
+    setUser({ role: match.role, name: match.name, username: match.username, code: match.code });
+    return { ok: true, role: match.role };
   };
 
   const logout = () => setUser(null);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthed: !!user, sendOtp, verifyOtp, logout }}>
+    <AuthContext.Provider value={{ user, isAuthed: !!user, sendOtp, verifyOtp, staffLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );

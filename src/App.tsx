@@ -13,7 +13,9 @@ import Cart from "./pages/Cart.tsx";
 import Profile from "./pages/Profile.tsx";
 import Dealer from "./pages/Dealer.tsx";
 import Admin from "./pages/Admin.tsx";
+import StaffLogin from "./pages/StaffLogin.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -32,8 +34,9 @@ const App = () => (
                 <Route path="/about" element={<About />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/dealer" element={<Dealer />} />
-                <Route path="/admin" element={<Admin />} />
+                <Route path="/staff-login" element={<StaffLogin />} />
+                <Route path="/dealer" element={<ProtectedRoute allow={["dealer", "admin"]}><Dealer /></ProtectedRoute>} />
+                <Route path="/admin" element={<ProtectedRoute allow={["admin"]}><Admin /></ProtectedRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
