@@ -30,11 +30,11 @@ const StaffLogin = () => {
     setLoading(true);
     const res = await staffLogin(username, password);
     setLoading(false);
-    if (!res.ok) {
+    if (res.ok === false) {
       toast.error(res.error);
       return;
     }
-    const role = res.role;
+    const role: typeof res.role = res.role;
     if (role !== mode) {
       toast.warning(`Logged in as ${role}. Redirecting to your dashboard.`);
     } else {
