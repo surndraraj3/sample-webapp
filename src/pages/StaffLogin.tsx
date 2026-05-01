@@ -31,6 +31,7 @@ const StaffLogin = () => {
     const res = await staffLogin(username, password);
     setLoading(false);
     if (!res.ok) { toast.error(res.error); return; }
+    // (TS narrowing) res is now { ok: true; role }
     if (res.role !== mode) {
       toast.warning(`Logged in as ${res.role}. Redirecting to your dashboard.`);
     } else {
