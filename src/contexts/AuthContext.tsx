@@ -51,7 +51,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return true;
   };
 
-  const staffLogin: Ctx["staffLogin"] = async (username, password) => {
+  const staffLogin = async (
+    username: string,
+    password: string
+  ): Promise<{ ok: true; role: Role } | { ok: false; error: string }> => {
     await new Promise((r) => setTimeout(r, 350));
     const match = STAFF_CREDENTIALS.find(
       (c) => c.username.toLowerCase() === username.trim().toLowerCase() && c.password === password
