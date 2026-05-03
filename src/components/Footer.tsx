@@ -16,7 +16,6 @@ export const Footer = () => {
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li><a href="/products" className="hover:text-primary transition-smooth">{t("nav.products")}</a></li>
             <li><a href="/about" className="hover:text-primary transition-smooth">{t("nav.about")}</a></li>
-            <li><a href="/staff-login" className="hover:text-primary transition-smooth">Dealer / Admin Login</a></li>
           </ul>
         </div>
         <div>

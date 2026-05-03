@@ -7,7 +7,8 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { toast } from "sonner";
-import { Phone, ArrowLeft, ShieldCheck } from "lucide-react";
+import { Phone, ArrowLeft, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Link } from "react-router-dom";
 
 type Props = {
   open: boolean;
@@ -105,6 +106,17 @@ export const AuthModal = ({ open, onOpenChange, onSuccess }: Props) => {
             </Button>
           </div>
         )}
+
+        <div className="mt-4 pt-4 border-t border-border/60 text-center text-sm">
+          <Link
+            to="/staff-login"
+            onClick={() => onOpenChange(false)}
+            className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-smooth"
+          >
+            <ShieldAlert className="h-4 w-4" />
+            Dealer / Admin Login
+          </Link>
+        </div>
       </DialogContent>
     </Dialog>
   );
