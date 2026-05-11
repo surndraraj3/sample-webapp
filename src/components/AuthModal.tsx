@@ -114,7 +114,7 @@ export const AuthModal = ({ open, onOpenChange, onSuccess }: Props) => {
             className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-smooth"
           >
             <ShieldAlert className="h-4 w-4" />
-            Dealer / Admin Login
+            Dealer / Admin / Employee Login
           </Link>
         </div>
       </DialogContent>

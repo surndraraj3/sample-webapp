@@ -14,8 +14,12 @@ import Profile from "./pages/Profile.tsx";
 import Dealer from "./pages/Dealer.tsx";
 import Admin from "./pages/Admin.tsx";
 import StaffLogin from "./pages/StaffLogin.tsx";
+import EmployeeProduction from "./pages/EmployeeProduction.tsx";
+import EmployeeSales from "./pages/EmployeeSales.tsx";
+import EmployeeService from "./pages/EmployeeService.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { PERMISSIONS } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +41,51 @@ const App = () => (
                 <Route path="/staff-login" element={<StaffLogin />} />
                 <Route path="/dealer" element={<ProtectedRoute allow={["dealer", "admin"]}><Dealer /></ProtectedRoute>} />
                 <Route path="/admin" element={<ProtectedRoute allow={["admin"]}><Admin /></ProtectedRoute>} />
+
+                {/* Employee Routes */}
+                <Route
+                  path="/employee/production"
+                  element={
+                    <ProtectedRoute
+                      allow={["employee", "admin"]}
+                      requiresPermission={[
+                        PERMISSIONS.VIEW_INVENTORY,
+                        PERMISSIONS.VIEW_RAW_MATERIALS,
+                        PERMISSIONS.VIEW_PRODUCTION_STATUS
+                      ]}
+                    >
+                      <EmployeeProduction />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/employee/sales"
+                  element={
+                    <ProtectedRoute
+                      allow={["employee", "admin"]}
+                      requiresPermission={[
+                        PERMISSIONS.VIEW_DEALERS,
+                        PERMISSIONS.VIEW_ORDERS
+                      ]}
+                    >
+                      <EmployeeSales />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/employee/service"
+                  element={
+                    <ProtectedRoute
+                      allow={["employee", "admin"]}
+                      requiresPermission={[
+                        PERMISSIONS.VIEW_TICKETS
+                      ]}
+                    >
+                      <EmployeeService />
+                    </ProtectedRoute>
+                  }
+                />
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

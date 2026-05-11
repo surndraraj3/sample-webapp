@@ -26,8 +26,9 @@ import { formatINR, products as seedProducts } from "@/data/products";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { EmployeeRole, ROLE_PERMISSIONS, EMPLOYEE_CREDENTIALS } from "@/contexts/AuthContext";
 
-type Section = "dashboard" | "menu" | "stock" | "dealers" | "media" | "orders" | "finance" | "support" | "marketing" | "users" | "reports";
+type Section = "dashboard" | "menu" | "stock" | "dealers" | "media" | "orders" | "finance" | "support" | "marketing" | "users" | "employees" | "reports";
 
 // Type Definitions
 type MenuItem = { id: string; name: string; price: number; description?: string; stock?: number; category?: string };
@@ -59,6 +60,19 @@ type Ticket = {
 type TeamMember = {
   id: string; name: string; username: string; role: "Production Manager" | "Accountant" | "Sales Manager" | "Support Staff" | "Admin";
   permissions: string[]; email: string; phone: string; status: "Active" | "Inactive";
+};
+type Employee = {
+  id: string;
+  employeeId: string; // MS-001, MS-002, etc.
+  name: string;
+  email: string;
+  phone: string;
+  role: "Production Team" | "Sales & Marketing Team" | "Service Technicians";
+  employeeRole: "production" | "sales" | "service";
+  permissions: string[];
+  status: "Active" | "Inactive";
+  password: string;
+  createdDate: string;
 };
 type Notification = {
   id: string; title: string; message: string; type: "promo" | "alert" | "update";
@@ -110,6 +124,20 @@ const initialTeamMembers: TeamMember[] = [
   { id: "TM002", name: "Priya Sharma", username: "priya", role: "Accountant", permissions: ["view_finance", "generate_invoices", "view_reports"], email: "priya@msi.com", phone: "9876502222", status: "Active" },
   { id: "TM003", name: "Anil Reddy", username: "anil", role: "Sales Manager", permissions: ["view_dealers", "manage_orders", "view_reports"], email: "anil@msi.com", phone: "9876503333", status: "Active" },
 ];
+
+const initialEmployees: Employee[] = EMPLOYEE_CREDENTIALS.map((emp, idx) => ({
+  id: `EMP${String(idx + 1).padStart(3, '0')}`,
+  employeeId: emp.employeeId,
+  name: emp.name,
+  email: emp.email,
+  phone: emp.phone,
+  role: emp.employeeRole === "production" ? "Production Team" : emp.employeeRole === "sales" ? "Sales & Marketing Team" : "Service Technicians",
+  employeeRole: emp.employeeRole,
+  permissions: ROLE_PERMISSIONS[emp.employeeRole],
+  status: "Active",
+  password: emp.password,
+  createdDate: "2026-05-01",
+}));
 
 const initialNotifications: Notification[] = [
   { id: "NOT001", title: "Summer Sale", message: "Get 20% off on all products!", type: "promo", recipients: "dealers", date: "2026-04-20", status: "Sent" },
@@ -164,6 +192,7 @@ const navItems: { id: Section; label: string; icon: any }[] = [
   { id: "finance", label: "Finance", icon: DollarSign },
   { id: "support", label: "Support", icon: Headphones },
   { id: "marketing", label: "Marketing", icon: Bell },
+  { id: "employees", label: "Employees", icon: UserPlus },
   { id: "users", label: "Team", icon: UserCog },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "media", label: "Media", icon: ImagePlus },
@@ -179,6 +208,7 @@ const Admin = () => {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
+  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>(initialRawMaterials);
 
@@ -248,6 +278,7 @@ const Admin = () => {
             {section === "finance" && <FinanceSection invoices={invoices} setInvoices={setInvoices} orders={orders} dealers={dealers} />}
             {section === "support" && <SupportSection tickets={tickets} setTickets={setTickets} dealers={dealers} />}
             {section === "marketing" && <MarketingSection notifications={notifications} setNotifications={setNotifications} media={media} />}
+            {section === "employees" && <EmployeeSection employees={employees} setEmployees={setEmployees} />}
             {section === "users" && <UsersSection teamMembers={teamMembers} setTeamMembers={setTeamMembers} />}
             {section === "reports" && <ReportsSection orders={orders} dealers={dealers} invoices={invoices} />}
             {section === "media" && <MediaSection media={media} setMedia={setMedia} />}
@@ -2736,6 +2767,378 @@ const MediaSection = ({ media, setMedia }: { media: MediaAsset[]; setMedia: (m: 
           ))}
         </div>
       )}
+    </>
+  );
+};
+
+/* ------------------------- EMPLOYEE MANAGEMENT (RBAC) ------------------------- */
+const EmployeeSection = ({ employees, setEmployees }: { employees: Employee[]; setEmployees: (e: Employee[]) => void }) => {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Employee | null>(null);
+  const [form, setForm] = useState<Omit<Employee, "id" | "employeeId" | "permissions" | "createdDate">>({
+    name: "",
+    email: "",
+    phone: "",
+    role: "Production Team",
+    employeeRole: "production",
+    status: "Active",
+    password: "employee@123"
+  });
+
+  const roleMapping: Record<Employee["role"], EmployeeRole> = {
+    "Production Team": "production",
+    "Sales & Marketing Team": "sales",
+    "Service Technicians": "service"
+  };
+
+  const reverseRoleMapping: Record<EmployeeRole, Employee["role"]> = {
+    "production": "Production Team",
+    "sales": "Sales & Marketing Team",
+    "service": "Service Technicians"
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({
+      name: "",
+      email: "",
+      phone: "",
+      role: "Production Team",
+      employeeRole: "production",
+      status: "Active",
+      password: "employee@123"
+    });
+    setOpen(true);
+  };
+
+  const openEdit = (emp: Employee) => {
+    setEditing(emp);
+    setForm({
+      name: emp.name,
+      email: emp.email,
+      phone: emp.phone,
+      role: emp.role,
+      employeeRole: emp.employeeRole,
+      status: emp.status,
+      password: emp.password
+    });
+    setOpen(true);
+  };
+
+  const generateEmployeeId = () => {
+    const maxId = employees.reduce((max, emp) => {
+      const num = parseInt(emp.employeeId.split('-')[1]);
+      return num > max ? num : max;
+    }, 0);
+    return `MS-${String(maxId + 1).padStart(3, '0')}`;
+  };
+
+  const save = () => {
+    if (!form.name || !form.email || !form.phone) {
+      toast.error("Name, email, and phone are required");
+      return;
+    }
+
+    if (editing) {
+      // Update existing employee
+      const permissions = ROLE_PERMISSIONS[form.employeeRole];
+      setEmployees(employees.map(emp =>
+        emp.id === editing.id
+          ? { ...emp, ...form, permissions }
+          : emp
+      ));
+      toast.success("Employee updated successfully");
+    } else {
+      // Create new employee
+      const newEmployeeId = generateEmployeeId();
+      const permissions = ROLE_PERMISSIONS[form.employeeRole];
+      const newEmployee: Employee = {
+        id: `EMP${String(employees.length + 1).padStart(3, '0')}`,
+        employeeId: newEmployeeId,
+        ...form,
+        permissions,
+        createdDate: new Date().toISOString().split('T')[0]
+      };
+      setEmployees([...employees, newEmployee]);
+      toast.success(`Employee created with ID: ${newEmployeeId}`);
+    }
+    setOpen(false);
+  };
+
+  const remove = (id: string) => {
+    setEmployees(employees.filter(emp => emp.id !== id));
+    toast.success("Employee removed successfully");
+  };
+
+  const toggleStatus = (id: string) => {
+    setEmployees(employees.map(emp =>
+      emp.id === id
+        ? { ...emp, status: emp.status === "Active" ? "Inactive" : "Active" }
+        : emp
+    ));
+  };
+
+  const handleRoleChange = (role: Employee["role"]) => {
+    const employeeRole = roleMapping[role];
+    setForm({ ...form, role, employeeRole });
+  };
+
+  const getRoleBadgeColor = (role: Employee["role"]) => {
+    switch (role) {
+      case "Production Team": return "bg-blue-500";
+      case "Sales & Marketing Team": return "bg-green-500";
+      case "Service Technicians": return "bg-purple-500";
+      default: return "bg-gray-500";
+    }
+  };
+
+  return (
+    <>
+      <SectionHeader
+        title="Employee Management"
+        subtitle="Manage employees with role-based access control. Each employee has a unique ID for login."
+      >
+        <Button onClick={openCreate} className="bg-gradient-cta">
+          <Plus className="mr-2 h-4 w-4" /> Add Employee
+        </Button>
+      </SectionHeader>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <Card className="shadow-card">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Employees</p>
+                <p className="text-2xl font-bold">{employees.length}</p>
+              </div>
+              <Users className="h-8 w-8 text-primary opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-card">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Active</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {employees.filter(e => e.status === "Active").length}
+                </p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-card">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Production Team</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {employees.filter(e => e.employeeRole === "production").length}
+                </p>
+              </div>
+              <Boxes className="h-8 w-8 text-blue-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-card">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Sales & Service</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {employees.filter(e => e.employeeRole === "sales" || e.employeeRole === "service").length}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-purple-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Employee Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {employees.map(employee => (
+          <Card key={employee.id} className="shadow-card">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "h-12 w-12 rounded-full flex items-center justify-center text-white font-semibold text-lg",
+                    getRoleBadgeColor(employee.role)
+                  )}>
+                    {employee.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-base">{employee.name}</div>
+                    <div className="text-sm font-mono text-primary font-medium">{employee.employeeId}</div>
+                  </div>
+                </div>
+                <Badge variant={employee.status === "Active" ? "default" : "secondary"} className="text-xs">
+                  {employee.status}
+                </Badge>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <Badge className={cn("text-xs", getRoleBadgeColor(employee.role))}>
+                    {employee.role}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span className="text-xs truncate">{employee.email}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span className="text-xs">{employee.phone}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Shield className="h-3.5 w-3.5" />
+                  <span className="text-xs">{employee.permissions.length} permissions</span>
+                </div>
+              </div>
+
+              <Separator className="my-3" />
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-8 text-xs"
+                  onClick={() => openEdit(employee)}
+                >
+                  <Pencil className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => toggleStatus(employee.id)}
+                >
+                  {employee.status === "Active" ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive h-8 text-xs"
+                  onClick={() => remove(employee.id)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Add/Edit Employee Dialog */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit Employee" : "Add New Employee"}</DialogTitle>
+            <DialogDescription>
+              {editing
+                ? "Update employee information and role assignment."
+                : "Create a new employee with auto-generated employee ID. Default password: employee@123"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="emp-name">Full Name *</Label>
+              <Input
+                id="emp-name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Enter full name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emp-email">Email *</Label>
+              <Input
+                id="emp-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="employee@msi.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emp-phone">Phone *</Label>
+              <Input
+                id="emp-phone"
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="9876543210"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emp-role">Role *</Label>
+              <Select value={form.role} onValueChange={handleRoleChange}>
+                <SelectTrigger id="emp-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Production Team">Production Team</SelectItem>
+                  <SelectItem value="Sales & Marketing Team">Sales & Marketing Team</SelectItem>
+                  <SelectItem value="Service Technicians">Service Technicians</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Permissions will be auto-assigned based on role
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="emp-password">Password</Label>
+              <Input
+                id="emp-password"
+                type="text"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="employee@123"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={form.status === "Active"}
+                  onCheckedChange={(checked) => setForm({ ...form, status: checked ? "Active" : "Inactive" })}
+                />
+                <span className="text-sm">{form.status}</span>
+              </div>
+            </div>
+
+            {/* Permissions Preview */}
+            <div className="space-y-2 p-3 bg-muted rounded-lg">
+              <Label className="text-xs font-semibold">Assigned Permissions:</Label>
+              <div className="flex flex-wrap gap-1">
+                {ROLE_PERMISSIONS[form.employeeRole].map(permission => (
+                  <Badge key={permission} variant="secondary" className="text-xs">
+                    {permission.replace(/_/g, ' ')}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save} className="bg-gradient-cta">
+              {editing ? "Update Employee" : "Create Employee"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
