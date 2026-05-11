@@ -1,342 +1,2363 @@
 import { useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Boxes, Package, ClipboardList, Wrench, IndianRupee, Plus, UserPlus, MessageSquarePlus } from "lucide-react";
+  LayoutDashboard, Boxes, Package, ClipboardList, Wrench, IndianRupee, Plus, UserPlus, MessageSquarePlus,
+  TrendingUp, ShoppingCart, Truck, FileText, CreditCard, Download, Bell, Video, Image as ImageIcon,
+  Phone, Mail, Search, Filter, Eye, ExternalLink, AlertCircle, CheckCircle, Calendar, MapPin,
+  DollarSign, Package2, Users, BarChart3, Activity, ArrowUpRight, ArrowDownRight, Star, Zap,
+  FileSpreadsheet, Receipt, Wallet, Send, Upload, PlayCircle, HelpCircle, MessageCircle, RefreshCw
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { formatINR, products } from "@/data/products";
 import { toast } from "sonner";
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
 
-type StockRow = { id: string; name: string; price: number; stock: number };
-type Installation = { id: number; customer: string; phone: string; location: string; product: string; date: string };
-type Ticket = { id: string; customer: string; issue: string; status: "Open" | "In Progress" | "Resolved" };
-type Order = { id: string; product: string; qty: number; total: number; date: string; status: "Placed" | "Dispatched" };
+// Type Definitions
+type Tab = "dashboard" | "inventory" | "orders" | "crm" | "payments" | "marketing" | "notifications";
 
-const initialStock: StockRow[] = products.map((p, i) => ({
-  id: p.id, name: p.name.en, price: p.price, stock: [12, 5, 2, 18][i],
+type DealerStock = {
+  id: string;
+  name: string;
+  price: number;
+  localStock: number;
+  parentStock: number;
+  minStock: number;
+  category: string;
+  image: string;
+};
+
+type DealerOrder = {
+  id: string;
+  products: { id: string; name: string; qty: number; price: number }[];
+  total: number;
+  gst: number;
+  grandTotal: number;
+  status: "Pending" | "Approved" | "Shipped" | "Delivered";
+  date: string;
+  trackingId?: string;
+  courier?: string;
+  eta?: string;
+  shippingStatus?: string;
+  invoiceId?: string;
+};
+
+type Customer = {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  address: string;
+  city: string;
+  totalPurchases: number;
+  lastPurchase?: string;
+  warranties: Warranty[];
+};
+
+type Warranty = {
+  id: string;
+  productName: string;
+  serialNumber: string;
+  purchaseDate: string;
+  expiryDate: string;
+  status: "Active" | "Expired" | "Claimed";
+};
+
+type ServiceRequest = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  type: "Complaint" | "Warranty Claim" | "Installation" | "Repair";
+  description: string;
+  status: "Open" | "In Progress" | "Resolved" | "Closed";
+  priority: "Low" | "Medium" | "High";
+  date: string;
+  resolvedDate?: string;
+};
+
+type PaymentTransaction = {
+  id: string;
+  type: "Payment" | "Order" | "Commission";
+  amount: number;
+  date: string;
+  method: "UPI" | "Net Banking" | "Credit" | "Cash";
+  status: "Success" | "Pending" | "Failed";
+  orderId?: string;
+  reference?: string;
+};
+
+type CreditInfo = {
+  totalLimit: number;
+  outstanding: number;
+  available: number;
+};
+
+type PromotionalAsset = {
+  id: string;
+  title: string;
+  type: "Poster" | "Video" | "Brochure";
+  category: "Product" | "Seasonal" | "Scheme";
+  thumbnail: string;
+  downloadUrl: string;
+  date: string;
+};
+
+type TrainingResource = {
+  id: string;
+  title: string;
+  category: "Installation" | "Troubleshooting" | "Repair" | "Product Features";
+  duration: string;
+  thumbnail: string;
+  videoUrl: string;
+};
+
+type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  type: "Promo" | "Alert" | "Update" | "Scheme";
+  date: string;
+  read: boolean;
+};
+
+// Initial Data
+const initialStock: DealerStock[] = products.map((p, i) => ({
+  id: p.id,
+  name: p.name.en,
+  price: p.price,
+  localStock: [12, 5, 2, 18][i],
+  parentStock: [150, 80, 45, 200][i],
+  minStock: [10, 5, 5, 15][i],
+  category: "Electronics",
+  image: p.image,
 }));
 
-const initialInstalls: Installation[] = [
-  { id: 1, customer: "Ravi Kumar", phone: "98765 43210", location: "Warangal, TS", product: "Smart Motor Robo", date: "2026-04-22" },
-  { id: 2, customer: "Lakshmi Devi", phone: "99887 11223", location: "Khammam, TS", product: "Submersible Pump", date: "2026-04-18" },
+const initialOrders: DealerOrder[] = [
+  {
+    id: "ORD-2451",
+    products: [{ id: "1", name: "Smart Water Motor Robo", qty: 10, price: 12500 }],
+    total: 125000,
+    gst: 22500,
+    grandTotal: 147500,
+    status: "Delivered",
+    date: "2026-04-15",
+    trackingId: "TRK789456123",
+    courier: "Blue Dart",
+    invoiceId: "INV-2451",
+  },
+  {
+    id: "ORD-2458",
+    products: [{ id: "2", name: "Anti-Scaling Unit", qty: 5, price: 8500 }],
+    total: 42500,
+    gst: 7650,
+    grandTotal: 50150,
+    status: "Shipped",
+    date: "2026-04-28",
+    trackingId: "TRK789456124",
+    courier: "DTDC",
+    eta: "2026-05-12",
+    shippingStatus: "In Transit - Hyderabad Hub",
+  },
+  {
+    id: "ORD-2462",
+    products: [{ id: "1", name: "Smart Water Motor Robo", qty: 15, price: 12500 }],
+    total: 187500,
+    gst: 33750,
+    grandTotal: 221250,
+    status: "Approved",
+    date: "2026-05-02",
+  },
 ];
 
-const initialTickets: Ticket[] = [
-  { id: "T-1041", customer: "Ravi Kumar", issue: "Display flickering", status: "Open" },
-  { id: "T-1038", customer: "Anita S.", issue: "Pump tripping at midnight", status: "In Progress" },
-  { id: "T-1029", customer: "Manohar", issue: "Sensor not pairing", status: "Resolved" },
+const initialCustomers: Customer[] = [
+  {
+    id: "CUST001",
+    name: "Ravi Kumar",
+    phone: "9876543210",
+    email: "ravi.kumar@email.com",
+    address: "Plot No 45, Hanamkonda",
+    city: "Warangal",
+    totalPurchases: 38500,
+    lastPurchase: "2026-04-22",
+    warranties: [
+      {
+        id: "WR001",
+        productName: "Smart Water Motor Robo",
+        serialNumber: "SN123456789",
+        purchaseDate: "2026-04-22",
+        expiryDate: "2028-04-22",
+        status: "Active",
+      },
+    ],
+  },
+  {
+    id: "CUST002",
+    name: "Lakshmi Devi",
+    phone: "9988711223",
+    email: "lakshmi@email.com",
+    address: "Main Road, Khammam",
+    city: "Khammam",
+    totalPurchases: 21500,
+    lastPurchase: "2026-04-18",
+    warranties: [
+      {
+        id: "WR002",
+        productName: "Submersible Pump",
+        serialNumber: "SN987654321",
+        purchaseDate: "2026-04-18",
+        expiryDate: "2028-04-18",
+        status: "Active",
+      },
+    ],
+  },
+  {
+    id: "CUST003",
+    name: "Suresh Reddy",
+    phone: "9876501234",
+    address: "Nalgonda",
+    city: "Nalgonda",
+    totalPurchases: 15000,
+    warranties: [],
+  },
+];
+
+const initialServiceRequests: ServiceRequest[] = [
+  {
+    id: "SR-1041",
+    customerId: "CUST001",
+    customerName: "Ravi Kumar",
+    type: "Complaint",
+    description: "Display flickering on controller unit",
+    status: "In Progress",
+    priority: "High",
+    date: "2026-05-03",
+  },
+  {
+    id: "SR-1038",
+    customerId: "CUST002",
+    customerName: "Lakshmi Devi",
+    type: "Warranty Claim",
+    description: "Pump motor not starting - within warranty period",
+    status: "Open",
+    priority: "Medium",
+    date: "2026-05-06",
+  },
+  {
+    id: "SR-1029",
+    customerId: "CUST003",
+    customerName: "Suresh Reddy",
+    type: "Installation",
+    description: "Request for installation assistance",
+    status: "Resolved",
+    priority: "Low",
+    date: "2026-04-25",
+    resolvedDate: "2026-04-26",
+  },
+];
+
+const initialTransactions: PaymentTransaction[] = [
+  {
+    id: "TXN-5401",
+    type: "Payment",
+    amount: 147500,
+    date: "2026-04-20",
+    method: "Net Banking",
+    status: "Success",
+    orderId: "ORD-2451",
+    reference: "HDFC2345678",
+  },
+  {
+    id: "TXN-5402",
+    type: "Order",
+    amount: -50150,
+    date: "2026-04-28",
+    method: "Credit",
+    status: "Pending",
+    orderId: "ORD-2458",
+  },
+  {
+    id: "TXN-5403",
+    type: "Commission",
+    amount: 7375,
+    date: "2026-04-30",
+    method: "Credit",
+    status: "Success",
+    reference: "Commission for April",
+  },
+];
+
+const initialCreditInfo: CreditInfo = {
+  totalLimit: 500000,
+  outstanding: 221250,
+  available: 278750,
+};
+
+const initialPromotionalAssets: PromotionalAsset[] = [
+  {
+    id: "PA001",
+    title: "Summer Bonanza Offer",
+    type: "Poster",
+    category: "Seasonal",
+    thumbnail: "/api/placeholder/300/400",
+    downloadUrl: "#",
+    date: "2026-05-01",
+  },
+  {
+    id: "PA002",
+    title: "Smart Motor Robo Product Launch",
+    type: "Video",
+    category: "Product",
+    thumbnail: "/api/placeholder/300/400",
+    downloadUrl: "#",
+    date: "2026-04-15",
+  },
+  {
+    id: "PA003",
+    title: "Dealer Scheme Q2 2026",
+    type: "Brochure",
+    category: "Scheme",
+    thumbnail: "/api/placeholder/300/400",
+    downloadUrl: "#",
+    date: "2026-04-01",
+  },
+];
+
+const initialTrainingResources: TrainingResource[] = [
+  {
+    id: "TR001",
+    title: "Installing Smart Water Motor Robo",
+    category: "Installation",
+    duration: "12:45",
+    thumbnail: "/api/placeholder/300/200",
+    videoUrl: "#",
+  },
+  {
+    id: "TR002",
+    title: "Troubleshooting Common Controller Issues",
+    category: "Troubleshooting",
+    duration: "18:30",
+    thumbnail: "/api/placeholder/300/200",
+    videoUrl: "#",
+  },
+  {
+    id: "TR003",
+    title: "Motor Repair and Maintenance",
+    category: "Repair",
+    duration: "25:15",
+    thumbnail: "/api/placeholder/300/200",
+    videoUrl: "#",
+  },
+];
+
+const initialNotifications: Notification[] = [
+  {
+    id: "NOT001",
+    title: "New Product Launch Alert",
+    message: "Introducing Smart Water Level Controller v2.0 with IoT capabilities!",
+    type: "Update",
+    date: "2026-05-08",
+    read: false,
+  },
+  {
+    id: "NOT002",
+    title: "Summer Discount Scheme",
+    message: "Get 15% extra commission on orders above ₹2 lakhs this month!",
+    type: "Promo",
+    date: "2026-05-05",
+    read: false,
+  },
+  {
+    id: "NOT003",
+    title: "Payment Reminder",
+    message: "Outstanding payment of ₹2,21,250 is pending. Please clear dues.",
+    type: "Alert",
+    date: "2026-05-03",
+    read: true,
+  },
+  {
+    id: "NOT004",
+    title: "Dealer Training Program",
+    message: "Join our virtual training session on May 15th at 10 AM.",
+    type: "Update",
+    date: "2026-05-01",
+    read: true,
+  },
+];
+
+// Chart Data
+const salesTrendData = [
+  { month: "Nov", sales: 285000, target: 300000 },
+  { month: "Dec", sales: 420000, target: 400000 },
+  { month: "Jan", sales: 365000, target: 380000 },
+  { month: "Feb", sales: 510000, target: 450000 },
+  { month: "Mar", sales: 585000, target: 520000 },
+  { month: "Apr", sales: 642000, target: 600000 },
+];
+
+const commissionData = [
+  { month: "Nov", commission: 14250 },
+  { month: "Dec", commission: 21000 },
+  { month: "Jan", commission: 18250 },
+  { month: "Feb", commission: 25500 },
+  { month: "Mar", commission: 29250 },
+  { month: "Apr", commission: 32100 },
 ];
 
 const Dealer = () => {
-  const [stock, setStock] = useState<StockRow[]>(initialStock);
-  const [installs, setInstalls] = useState<Installation[]>(initialInstalls);
-  const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
-  const [orders, setOrders] = useState<Order[]>([]);
-
-  // Order form
-  const [orderOpen, setOrderOpen] = useState(false);
-  const [orderProduct, setOrderProduct] = useState(products[0].id);
-  const [orderQty, setOrderQty] = useState(1);
-
-  // Installation form
-  const [instOpen, setInstOpen] = useState(false);
-  const [inst, setInst] = useState({ customer: "", phone: "", location: "", product: products[0].name.en });
-
-  // Ticket form
-  const [ticketOpen, setTicketOpen] = useState(false);
-  const [ticket, setTicket] = useState({ customer: "", issue: "" });
-
-  const placeOrder = () => {
-    const p = products.find((x) => x.id === orderProduct)!;
-    if (orderQty < 1) { toast.error("Quantity must be at least 1"); return; }
-    const newOrder: Order = {
-      id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      product: p.name.en, qty: orderQty, total: p.price * orderQty,
-      date: new Date().toISOString().slice(0, 10), status: "Placed",
-    };
-    setOrders((o) => [newOrder, ...o]);
-    setStock((s) => s.map((r) => r.id === p.id ? { ...r, stock: r.stock + orderQty } : r));
-    setOrderOpen(false); setOrderQty(1);
-    toast.success(`Order ${newOrder.id} placed for ${orderQty} × ${p.name.en}`);
-  };
-
-  const addInstallation = () => {
-    if (!inst.customer || !/^\d{10}$/.test(inst.phone.replace(/\s/g, "")) || !inst.location) {
-      toast.error("Fill all fields. Phone must be 10 digits."); return;
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+  
+  // State Management
+  const [stock, setStock] = useState<DealerStock[]>(initialStock);
+  const [orders, setOrders] = useState<DealerOrder[]>(initialOrders);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>(initialServiceRequests);
+  const [transactions, setTransactions] = useState<PaymentTransaction[]>(initialTransactions);
+  const [creditInfo, setCreditInfo] = useState<CreditInfo>(initialCreditInfo);
+  const [promotionalAssets] = useState<PromotionalAsset[]>(initialPromotionalAssets);
+  const [trainingResources] = useState<TrainingResource[]>(initialTrainingResources);
+  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  
+  // Dialog States
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [warrantyDialogOpen, setWarrantyDialogOpen] = useState(false);
+  
+  // Form States
+  const [orderCart, setOrderCart] = useState<{ id: string; qty: number }[]>([]);
+  const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", email: "", address: "", city: "" });
+  const [newServiceRequest, setNewServiceRequest] = useState({ customerId: "", type: "Complaint" as const, description: "", priority: "Medium" as const });
+  const [paymentForm, setPaymentForm] = useState({ amount: "", method: "UPI" as const, orderId: "" });
+  const [selectedTracking, setSelectedTracking] = useState<DealerOrder | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<DealerOrder | null>(null);
+  const [warrantySearch, setWarrantySearch] = useState("");
+  
+  // Calculations
+  const totalLocalStock = stock.reduce((sum, item) => sum + item.localStock, 0);
+  const lowStockItems = stock.filter(item => item.localStock < item.minStock);
+  const pendingOrders = orders.filter(o => o.status === "Pending" || o.status === "Approved");
+  const activeServiceRequests = serviceRequests.filter(s => s.status === "Open" || s.status === "In Progress");
+  const unreadNotifications = notifications.filter(n => !n.read).length;
+  const currentMonthSales = salesTrendData[salesTrendData.length - 1].sales;
+  const currentMonthCommission = commissionData[commissionData.length - 1].commission;
+  
+  // Handlers
+  const addToCart = (productId: string) => {
+    const existing = orderCart.find(item => item.id === productId);
+    if (existing) {
+      setOrderCart(orderCart.map(item => 
+        item.id === productId ? { ...item, qty: item.qty + 1 } : item
+      ));
+    } else {
+      setOrderCart([...orderCart, { id: productId, qty: 1 }]);
     }
-    const row: Installation = {
-      id: Date.now(), ...inst, date: new Date().toISOString().slice(0, 10),
+    toast.success("Added to cart");
+  };
+  
+  const removeFromCart = (productId: string) => {
+    setOrderCart(orderCart.filter(item => item.id !== productId));
+    toast.success("Removed from cart");
+  };
+  
+  const updateCartQty = (productId: string, qty: number) => {
+    setOrderCart(orderCart.map(item => 
+      item.id === productId ? { ...item, qty: Math.max(1, qty) } : item
+    ));
+  };
+  
+  const placeOrder = () => {
+    if (orderCart.length === 0) {
+      toast.error("Cart is empty");
+      return;
+    }
+    
+    const orderProducts = orderCart.map(item => {
+      const product = stock.find(p => p.id === item.id)!;
+      return { id: product.id, name: product.name, qty: item.qty, price: product.price };
+    });
+    
+    const total = orderProducts.reduce((sum, p) => sum + (p.qty * p.price), 0);
+    const gst = Math.round(total * 0.18);
+    const grandTotal = total + gst;
+    
+    const newOrder: DealerOrder = {
+      id: `ORD-${Math.floor(2000 + Math.random() * 9000)}`,
+      products: orderProducts,
+      total,
+      gst,
+      grandTotal,
+      status: "Pending",
+      date: new Date().toISOString().slice(0, 10),
     };
-    setInstalls((i) => [row, ...i]);
-    setStock((s) => s.map((r) => r.name === inst.product && r.stock > 0 ? { ...r, stock: r.stock - 1 } : r));
-    setInstOpen(false); setInst({ customer: "", phone: "", location: "", product: products[0].name.en });
-    toast.success("Installation recorded & warranty registered");
+    
+    setOrders([newOrder, ...orders]);
+    setOrderCart([]);
+    setOrderDialogOpen(false);
+    toast.success(`Order ${newOrder.id} placed successfully! Total: ${formatINR(grandTotal)}`);
   };
-
-  const addTicket = () => {
-    if (!ticket.customer || !ticket.issue) { toast.error("Customer and issue required"); return; }
-    const t: Ticket = { id: `T-${Math.floor(1000 + Math.random() * 9000)}`, ...ticket, status: "Open" };
-    setTickets((arr) => [t, ...arr]);
-    setTicketOpen(false); setTicket({ customer: "", issue: "" });
-    toast.success(`Ticket ${t.id} created`);
+  
+  const addCustomer = () => {
+    if (!newCustomer.name || !newCustomer.phone || !newCustomer.city) {
+      toast.error("Name, phone, and city are required");
+      return;
+    }
+    
+    if (!/^\d{10}$/.test(newCustomer.phone)) {
+      toast.error("Phone must be 10 digits");
+      return;
+    }
+    
+    const customer: Customer = {
+      id: `CUST${String(customers.length + 1).padStart(3, '0')}`,
+      ...newCustomer,
+      totalPurchases: 0,
+      warranties: [],
+    };
+    
+    setCustomers([customer, ...customers]);
+    setNewCustomer({ name: "", phone: "", email: "", address: "", city: "" });
+    setCustomerDialogOpen(false);
+    toast.success(`Customer ${customer.name} added successfully!`);
   };
-
-  const updateTicketStatus = (id: string, status: Ticket["status"]) => {
-    setTickets((arr) => arr.map((t) => t.id === id ? { ...t, status } : t));
+  
+  const addServiceRequest = () => {
+    if (!newServiceRequest.customerId || !newServiceRequest.description) {
+      toast.error("Customer and description are required");
+      return;
+    }
+    
+    const customer = customers.find(c => c.id === newServiceRequest.customerId);
+    if (!customer) {
+      toast.error("Customer not found");
+      return;
+    }
+    
+    const request: ServiceRequest = {
+      id: `SR-${Math.floor(1000 + Math.random() * 9000)}`,
+      customerName: customer.name,
+      ...newServiceRequest,
+      status: "Open",
+      date: new Date().toISOString().slice(0, 10),
+    };
+    
+    setServiceRequests([request, ...serviceRequests]);
+    setNewServiceRequest({ customerId: "", type: "Complaint", description: "", priority: "Medium" });
+    setServiceDialogOpen(false);
+    toast.success(`Service request ${request.id} created successfully!`);
   };
-
-  const totalUnits = stock.reduce((a, b) => a + b.stock, 0);
-  const mtdSales = installs.length * 28450;
+  
+  const makePayment = () => {
+    if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) {
+      toast.error("Enter valid amount");
+      return;
+    }
+    
+    const amount = parseFloat(paymentForm.amount);
+    
+    const transaction: PaymentTransaction = {
+      id: `TXN-${Math.floor(5000 + Math.random() * 5000)}`,
+      type: "Payment",
+      amount,
+      date: new Date().toISOString().slice(0, 10),
+      method: paymentForm.method,
+      status: "Success",
+      orderId: paymentForm.orderId || undefined,
+      reference: `${paymentForm.method}${Math.floor(100000 + Math.random() * 900000)}`,
+    };
+    
+    setTransactions([transaction, ...transactions]);
+    setCreditInfo(prev => ({
+      ...prev,
+      outstanding: Math.max(0, prev.outstanding - amount),
+      available: Math.min(prev.totalLimit, prev.available + amount),
+    }));
+    
+    setPaymentForm({ amount: "", method: "UPI", orderId: "" });
+    setPaymentDialogOpen(false);
+    toast.success(`Payment of ${formatINR(amount)} successful!`);
+  };
+  
+  const markNotificationRead = (id: string) => {
+    setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+  
+  const markAllNotificationsRead = () => {
+    setNotifications(notifications.map(n => ({ ...n, read: true })));
+    toast.success("All notifications marked as read");
+  };
 
   return (
     <SiteLayout>
-      <section className="container py-10">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+      <div className="container py-4 md:py-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold">Dealer Dashboard</h1>
-            <p className="text-muted-foreground">Hyderabad Territory • Demo data</p>
+            <h1 className="text-2xl md:text-3xl font-bold">Dealer Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {user?.name || "Dealer Portal"} • Code: {user?.code || "DLR001"}
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Dialog open={instOpen} onOpenChange={setInstOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline"><UserPlus className="mr-2 h-4 w-4" /> Installation Entry</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>New Installation Entry</DialogTitle>
-                  <DialogDescription>Capture customer details for warranty tracking.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-3 py-2">
-                  <div className="space-y-1.5">
-                    <Label>Customer Name</Label>
-                    <Input value={inst.customer} onChange={(e) => setInst({ ...inst, customer: e.target.value })} placeholder="Ravi Kumar" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="relative"
+              onClick={() => setActiveTab("notifications")}
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Notifications
+              {unreadNotifications > 0 && (
+                <Badge className="ml-2 h-5 min-w-5 rounded-full px-1.5 bg-red-500 text-white">
+                  {unreadNotifications}
+                </Badge>
+              )}
+            </Button>
+            <Button variant="outline" size="sm">
+              <HelpCircle className="h-4 w-4 mr-2" />
+              Help
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile Tab Selector */}
+        <div className="lg:hidden mb-4">
+          <Select value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dashboard">
+                <div className="flex items-center gap-2">
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </div>
+              </SelectItem>
+              <SelectItem value="inventory">
+                <div className="flex items-center gap-2">
+                  <Boxes className="h-4 w-4" />
+                  Inventory
+                </div>
+              </SelectItem>
+              <SelectItem value="orders">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4" />
+                  Orders
+                </div>
+              </SelectItem>
+              <SelectItem value="crm">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  CRM
+                </div>
+              </SelectItem>
+              <SelectItem value="payments">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4" />
+                  Payments
+                </div>
+              </SelectItem>
+              <SelectItem value="marketing">
+                <div className="flex items-center gap-2">
+                  <Star className="h-4 w-4" />
+                  Marketing
+                </div>
+              </SelectItem>
+              <SelectItem value="notifications">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4" />
+                  Notifications
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop/Mobile Layout */}
+        <div className="grid gap-4 md:gap-6 lg:grid-cols-[240px_1fr]">
+          {/* Sidebar */}
+          <aside className="hidden lg:block lg:sticky lg:top-20 self-start">
+            <Card className="shadow-card">
+              <ScrollArea className="h-[calc(100vh-10rem)]">
+                <nav className="p-2">
+                  {[
+                    { id: "dashboard" as Tab, label: "Dashboard", icon: LayoutDashboard },
+                    { id: "inventory" as Tab, label: "Inventory", icon: Boxes },
+                    { id: "orders" as Tab, label: "Orders", icon: ShoppingCart },
+                    { id: "crm" as Tab, label: "CRM", icon: Users },
+                    { id: "payments" as Tab, label: "Payments", icon: Wallet },
+                    { id: "marketing" as Tab, label: "Marketing", icon: Star },
+                    { id: "notifications" as Tab, label: "Notifications", icon: Bell },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    const active = activeTab === item.id;
+                    const badge = item.id === "notifications" ? unreadNotifications : 
+                                  item.id === "orders" ? pendingOrders.length :
+                                  item.id === "crm" ? activeServiceRequests.length : 0;
+                    
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        className={cn(
+                          "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-smooth",
+                          active
+                            ? "bg-gradient-cta text-primary-foreground shadow-soft"
+                            : "text-foreground/70 hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </div>
+                        {badge > 0 && (
+                          <Badge variant={active ? "secondary" : "default"} className="h-5 min-w-5 rounded-full px-1.5">
+                            {badge}
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </ScrollArea>
+            </Card>
+          </aside>
+
+          {/* Main Content */}
+          <div className="min-w-0">
+            {/* DASHBOARD TAB */}
+            {activeTab === "dashboard" && (
+              <DashboardTab
+                stock={stock}
+                orders={orders}
+                serviceRequests={serviceRequests}
+                creditInfo={creditInfo}
+                lowStockItems={lowStockItems}
+                currentMonthSales={currentMonthSales}
+                currentMonthCommission={currentMonthCommission}
+                salesTrendData={salesTrendData}
+                commissionData={commissionData}
+              />
+            )}
+
+            {/* INVENTORY TAB */}
+            {activeTab === "inventory" && (
+              <InventoryTab
+                stock={stock}
+                lowStockItems={lowStockItems}
+                addToCart={addToCart}
+              />
+            )}
+
+            {/* ORDERS TAB */}
+            {activeTab === "orders" && (
+              <OrdersTab
+                orders={orders}
+                orderCart={orderCart}
+                orderDialogOpen={orderDialogOpen}
+                setOrderDialogOpen={setOrderDialogOpen}
+                setSelectedTracking={setSelectedTracking}
+                setTrackingDialogOpen={setTrackingDialogOpen}
+                setSelectedInvoice={setSelectedInvoice}
+                setInvoiceDialogOpen={setInvoiceDialogOpen}
+                stock={stock}
+                removeFromCart={removeFromCart}
+                updateCartQty={updateCartQty}
+                placeOrder={placeOrder}
+              />
+            )}
+
+            {/* CRM TAB */}
+            {activeTab === "crm" && (
+              <CRMTab
+                customers={customers}
+                serviceRequests={serviceRequests}
+                setServiceRequests={setServiceRequests}
+                customerDialogOpen={customerDialogOpen}
+                setCustomerDialogOpen={setCustomerDialogOpen}
+                serviceDialogOpen={serviceDialogOpen}
+                setServiceDialogOpen={setServiceDialogOpen}
+                warrantyDialogOpen={warrantyDialogOpen}
+                setWarrantyDialogOpen={setWarrantyDialogOpen}
+                newCustomer={newCustomer}
+                setNewCustomer={setNewCustomer}
+                newServiceRequest={newServiceRequest}
+                setNewServiceRequest={setNewServiceRequest}
+                warrantySearch={warrantySearch}
+                setWarrantySearch={setWarrantySearch}
+                addCustomer={addCustomer}
+                addServiceRequest={addServiceRequest}
+              />
+            )}
+
+            {/* PAYMENTS TAB */}
+            {activeTab === "payments" && (
+              <PaymentsTab
+                creditInfo={creditInfo}
+                transactions={transactions}
+                orders={orders}
+                paymentDialogOpen={paymentDialogOpen}
+                setPaymentDialogOpen={setPaymentDialogOpen}
+                paymentForm={paymentForm}
+                setPaymentForm={setPaymentForm}
+                makePayment={makePayment}
+              />
+            )}
+
+            {/* MARKETING TAB */}
+            {activeTab === "marketing" && (
+              <MarketingTab
+                promotionalAssets={promotionalAssets}
+                trainingResources={trainingResources}
+              />
+            )}
+
+            {/* NOTIFICATIONS TAB */}
+            {activeTab === "notifications" && (
+              <NotificationsTab
+                notifications={notifications}
+                markNotificationRead={markNotificationRead}
+                markAllNotificationsRead={markAllNotificationsRead}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Tracking Dialog */}
+        <Dialog open={trackingDialogOpen} onOpenChange={setTrackingDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Shipping Tracking - {selectedTracking?.id}</DialogTitle>
+              <DialogDescription>Track your order shipment in real-time</DialogDescription>
+            </DialogHeader>
+            {selectedTracking && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Tracking ID</Label>
+                    <p className="font-mono font-semibold">{selectedTracking.trackingId || "Not assigned yet"}</p>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Phone Number</Label>
-                    <Input value={inst.phone} onChange={(e) => setInst({ ...inst, phone: e.target.value.replace(/\D/g, "") })} maxLength={10} placeholder="98765 43210" />
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Courier</Label>
+                    <p className="font-semibold">{selectedTracking.courier || "Not assigned yet"}</p>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Location</Label>
-                    <Input value={inst.location} onChange={(e) => setInst({ ...inst, location: e.target.value })} placeholder="Village, District, State" />
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Status</Label>
+                    <Badge>{selectedTracking.status}</Badge>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Product</Label>
-                    <Select value={inst.product} onValueChange={(v) => setInst({ ...inst, product: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {products.map((p) => <SelectItem key={p.id} value={p.name.en}>{p.name.en}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">ETA</Label>
+                    <p className="font-semibold">{selectedTracking.eta || "Calculating..."}</p>
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button onClick={addInstallation} className="bg-gradient-cta">Save Installation</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={ticketOpen} onOpenChange={setTicketOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline"><MessageSquarePlus className="mr-2 h-4 w-4" /> New Service Request</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Raise Service Request</DialogTitle>
-                  <DialogDescription>Log a customer complaint from your territory.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-3 py-2">
-                  <div className="space-y-1.5">
-                    <Label>Customer Name</Label>
-                    <Input value={ticket.customer} onChange={(e) => setTicket({ ...ticket, customer: e.target.value })} />
+                
+                {selectedTracking.shippingStatus && (
+                  <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                        <Truck className="h-5 w-5" />
+                        <span className="font-medium">{selectedTracking.shippingStatus}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                <Separator />
+                
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">Order Details</Label>
+                  <div className="space-y-2">
+                    {selectedTracking.products.map((product, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-sm">
+                        <span>{product.name} × {product.qty}</span>
+                        <span className="font-semibold">{formatINR(product.price * product.qty)}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Issue Description</Label>
-                    <Textarea value={ticket.issue} onChange={(e) => setTicket({ ...ticket, issue: e.target.value })} rows={3} />
+                  <Separator className="my-2" />
+                  <div className="flex justify-between font-semibold">
+                    <span>Grand Total (incl. GST)</span>
+                    <span>{formatINR(selectedTracking.grandTotal)}</span>
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button onClick={addTicket} className="bg-gradient-cta">Create Ticket</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTrackingDialogOpen(false)}>Close</Button>
+              {selectedTracking?.trackingId && (
+                <Button
+                  onClick={() => {
+                    window.open(`https://www.google.com/search?q=${selectedTracking.trackingId}`, '_blank');
+                  }}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Track on Courier Website
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-            <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
+        {/* Invoice Dialog */}
+        <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Invoice - {selectedInvoice?.invoiceId || selectedInvoice?.id}</DialogTitle>
+              <DialogDescription>Download or view your invoice</DialogDescription>
+            </DialogHeader>
+            {selectedInvoice && (
+              <div className="space-y-4">
+                <div className="bg-secondary/30 p-4 rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Invoice Number:</span>
+                    <span className="font-mono font-semibold">{selectedInvoice.invoiceId || selectedInvoice.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Invoice Date:</span>
+                    <span className="font-semibold">{selectedInvoice.date}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Due Date:</span>
+                    <span className="font-semibold">{new Date(new Date(selectedInvoice.date).getTime() + 30*24*60*60*1000).toISOString().slice(0, 10)}</span>
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">Items</Label>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="text-right">Price</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedInvoice.products.map((product, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>{product.name}</TableCell>
+                          <TableCell className="text-right">{product.qty}</TableCell>
+                          <TableCell className="text-right">{formatINR(product.price)}</TableCell>
+                          <TableCell className="text-right">{formatINR(product.price * product.qty)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal:</span>
+                    <span>{formatINR(selectedInvoice.total)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">GST (18%):</span>
+                    <span>{formatINR(selectedInvoice.gst)}</span>
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="flex justify-between font-bold text-lg">
+                    <span>Grand Total:</span>
+                    <span>{formatINR(selectedInvoice.grandTotal)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setInvoiceDialogOpen(false)}>Close</Button>
+              <Button onClick={() => toast.success("Invoice downloaded!")}>
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </SiteLayout>
+  );
+};
+
+// Dashboard Tab Component
+const DashboardTab = ({
+  stock, orders, serviceRequests, creditInfo, lowStockItems,
+  currentMonthSales, currentMonthCommission, salesTrendData, commissionData
+}: any) => (
+  <div className="space-y-6">
+    {/* Key Metrics */}
+    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <Card className="shadow-card">
+        <CardContent className="p-4 md:p-5">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-xl bg-gradient-cta text-primary-foreground">
+              <DollarSign className="h-5 w-5 md:h-6 md:w-6" />
+            </div>
+            <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+              <TrendingUp className="h-3 w-3 mr-1" />
+              +12%
+            </Badge>
+          </div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">MTD Sales</div>
+          <div className="text-xl md:text-2xl font-bold">{formatINR(currentMonthSales)}</div>
+          <p className="text-xs text-muted-foreground mt-1">Target: ₹6.00L</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardContent className="p-4 md:p-5">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-xl bg-gradient-cta text-primary-foreground">
+              <IndianRupee className="h-5 w-5 md:h-6 md:w-6" />
+            </div>
+            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              5%
+            </Badge>
+          </div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Commission</div>
+          <div className="text-xl md:text-2xl font-bold">{formatINR(currentMonthCommission)}</div>
+          <p className="text-xs text-muted-foreground mt-1">This month</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardContent className="p-4 md:p-5">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-xl bg-gradient-cta text-primary-foreground">
+              <ShoppingCart className="h-5 w-5 md:h-6 md:w-6" />
+            </div>
+            {orders.filter((o: any) => o.status === "Pending").length > 0 && (
+              <Badge variant="destructive">{orders.filter((o: any) => o.status === "Pending").length} Pending</Badge>
+            )}
+          </div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Total Orders</div>
+          <div className="text-xl md:text-2xl font-bold">{orders.length}</div>
+          <p className="text-xs text-muted-foreground mt-1">{orders.filter((o: any) => o.status === "Delivered").length} delivered</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardContent className="p-4 md:p-5">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-xl bg-gradient-cta text-primary-foreground">
+              <Boxes className="h-5 w-5 md:h-6 md:w-6" />
+            </div>
+            {lowStockItems.length > 0 && (
+              <Badge variant="destructive">{lowStockItems.length} Low</Badge>
+            )}
+          </div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Stock Status</div>
+          <div className="text-xl md:text-2xl font-bold">{stock.reduce((sum: number, item: any) => sum + item.localStock, 0)} units</div>
+          <p className="text-xs text-muted-foreground mt-1">{stock.length} products</p>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Charts Row */}
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Sales Trend (Last 6 Months)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={250}>
+            <AreaChart data={salesTrendData}>
+              <defs>
+                <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="month" className="text-xs" />
+              <YAxis className="text-xs" />
+              <Tooltip
+                contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                formatter={(value: any) => formatINR(value)}
+              />
+              <Legend />
+              <Area type="monotone" dataKey="sales" stroke="#10b981" fillOpacity={1} fill="url(#colorSales)" name="Sales" />
+              <Area type="monotone" dataKey="target" stroke="#f59e0b" fillOpacity={0} strokeDasharray="5 5" name="Target" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+            <IndianRupee className="h-5 w-5 text-primary" />
+            Commission Earnings
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={commissionData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="month" className="text-xs" />
+              <YAxis className="text-xs" />
+              <Tooltip
+                contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                formatter={(value: any) => formatINR(value)}
+              />
+              <Legend />
+              <Bar dataKey="commission" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Commission" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Credit & Alerts */}
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+            <CreditCard className="h-5 w-5 text-primary" />
+            Credit Limit Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Total Credit Limit</span>
+              <span className="font-semibold">{formatINR(creditInfo.totalLimit)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Outstanding</span>
+              <span className="font-semibold text-orange-600">{formatINR(creditInfo.outstanding)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Available</span>
+              <span className="font-semibold text-green-600">{formatINR(creditInfo.available)}</span>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Credit Utilization</span>
+              <span>{Math.round((creditInfo.outstanding / creditInfo.totalLimit) * 100)}%</span>
+            </div>
+            <Progress 
+              value={(creditInfo.outstanding / creditInfo.totalLimit) * 100}
+              className="h-2"
+            />
+          </div>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+            <AlertCircle className="h-5 w-5 text-primary" />
+            Alerts & Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {lowStockItems.length > 0 && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800">
+              <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-orange-900 dark:text-orange-100">Low Stock Alert</p>
+                <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                  {lowStockItems.length} products below minimum stock level
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {serviceRequests.filter((s: any) => s.status === "Open").length > 0 && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
+              <Wrench className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900 dark:text-red-100">Pending Service Requests</p>
+                <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                  {serviceRequests.filter((s: any) => s.status === "Open").length} open requests need attention
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {creditInfo.outstanding > creditInfo.totalLimit * 0.8 && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800">
+              <CreditCard className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">Credit Limit Alert</p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                  You've used over 80% of your credit limit
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {lowStockItems.length === 0 && serviceRequests.filter((s: any) => s.status === "Open").length === 0 && creditInfo.outstanding < creditInfo.totalLimit * 0.8 && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
+              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 dark:text-green-100">All Systems Good</p>
+                <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                  No urgent actions required
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  </div>
+);
+
+// Inventory Tab Component
+const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-xl md:text-2xl font-bold">Inventory & Stock Management</h2>
+        <p className="text-sm text-muted-foreground mt-1">View company stock and manage your local inventory</p>
+      </div>
+      {lowStockItems.length > 0 && (
+        <Badge variant="destructive" className="hidden sm:flex">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          {lowStockItems.length} Low Stock
+        </Badge>
+      )}
+    </div>
+
+    {/* Stock Overview Cards */}
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <Card className="shadow-card">
+        <CardContent className="p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Local Stock</div>
+          <div className="text-2xl font-bold">{stock.reduce((sum: number, item: any) => sum + item.localStock, 0)}</div>
+          <p className="text-xs text-muted-foreground mt-1">units on hand</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardContent className="p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Parent Stock</div>
+          <div className="text-2xl font-bold">{stock.reduce((sum: number, item: any) => sum + item.parentStock, 0)}</div>
+          <p className="text-xs text-muted-foreground mt-1">available to order</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardContent className="p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Low Stock Items</div>
+          <div className="text-2xl font-bold text-orange-600">{lowStockItems.length}</div>
+          <p className="text-xs text-muted-foreground mt-1">need reordering</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card">
+        <CardContent className="p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Total Products</div>
+          <div className="text-2xl font-bold">{stock.length}</div>
+          <p className="text-xs text-muted-foreground mt-1">in catalog</p>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Product Catalog */}
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package2 className="h-5 w-5 text-primary" />
+          Digital Product Catalog
+        </CardTitle>
+        <CardDescription>View detailed specifications and order products</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {stock.map((product: any) => {
+            const isLowStock = product.localStock < product.minStock;
+            const stockPercentage = (product.localStock / product.minStock) * 100;
+            
+            return (
+              <Card key={product.id} className={cn("shadow-sm", isLowStock && "border-orange-300 dark:border-orange-800")}>
+                <CardContent className="p-4">
+                  <div className="aspect-video bg-secondary/30 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                  </div>
+                  
+                  <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
+                  <p className="text-lg font-bold text-primary mb-2">{formatINR(product.price)}</p>
+                  
+                  <div className="space-y-2 mb-3">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Your Stock:</span>
+                      <span className={cn("font-semibold", isLowStock && "text-orange-600")}>
+                        {product.localStock} units
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Company Stock:</span>
+                      <span className="font-semibold text-green-600">{product.parentStock} units</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Min Stock:</span>
+                      <span className="font-semibold">{product.minStock} units</span>
+                    </div>
+                  </div>
+                  
+                  {isLowStock && (
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                        <span>Stock Level</span>
+                        <span>{Math.min(100, Math.round(stockPercentage))}%</span>
+                      </div>
+                      <Progress value={Math.min(100, stockPercentage)} className="h-1.5" />
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => addToCart(product.id)}
+                      disabled={product.parentStock === 0}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add to Order
+                    </Button>
+                    <Button size="sm" variant="outline">
+                      <Eye className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  
+                  {isLowStock && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-orange-600">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>Low stock - reorder soon</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
+
+// Orders Tab Component (continued in next message due to length)
+const OrdersTab = ({
+  orders, orderCart, orderDialogOpen, setOrderDialogOpen,
+  setSelectedTracking, setTrackingDialogOpen,
+  setSelectedInvoice, setInvoiceDialogOpen,
+  stock, removeFromCart, updateCartQty, placeOrder
+}: any) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-xl md:text-2xl font-bold">Orders & Tracking</h2>
+        <p className="text-sm text-muted-foreground mt-1">Place bulk orders and track shipments</p>
+      </div>
+      <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
+        <DialogTrigger asChild>
+          <Button className="bg-gradient-cta">
+            <Plus className="h-4 w-4 mr-2" />
+            New Order
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Place Bulk Order</DialogTitle>
+            <DialogDescription>Add products to your cart and place order</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[400px] pr-4">
+            {orderCart.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>Your cart is empty. Add products from the catalog.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {orderCart.map((item: any) => {
+                  const product = stock.find((p: any) => p.id === item.id);
+                  if (!product) return null;
+                  
+                  return (
+                    <Card key={item.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 bg-secondary rounded flex-shrink-0">
+                            <img src={product.image} alt={product.name} className="w-full h-full object-cover rounded" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-sm truncate">{product.name}</h4>
+                            <p className="text-sm text-muted-foreground">{formatINR(product.price)} per unit</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={item.qty}
+                              onChange={(e) => updateCartQty(item.id, parseInt(e.target.value) || 1)}
+                              className="w-20 h-8"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeFromCart(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                          <div className="text-right min-w-[100px]">
+                            <p className="font-semibold">{formatINR(product.price * item.qty)}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                
+                <Separator />
+                
+                <div className="space-y-2 bg-secondary/30 p-4 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal:</span>
+                    <span className="font-semibold">
+                      {formatINR(orderCart.reduce((sum: number, item: any) => {
+                        const product = stock.find((p: any) => p.id === item.id);
+                        return sum + (product ? product.price * item.qty : 0);
+                      }, 0))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">GST (18%):</span>
+                    <span className="font-semibold">
+                      {formatINR(Math.round(orderCart.reduce((sum: number, item: any) => {
+                        const product = stock.find((p: any) => p.id === item.id);
+                        return sum + (product ? product.price * item.qty : 0);
+                      }, 0) * 0.18))}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Grand Total:</span>
+                    <span className="text-primary">
+                      {formatINR(Math.round(orderCart.reduce((sum: number, item: any) => {
+                        const product = stock.find((p: any) => p.id === item.id);
+                        return sum + (product ? product.price * item.qty : 0);
+                      }, 0) * 1.18))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOrderDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={placeOrder}
+              disabled={orderCart.length === 0}
+              className="bg-gradient-cta"
+            >
+              Place Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+
+    {/* Orders List */}
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShoppingCart className="h-5 w-5 text-primary" />
+          Your Orders
+        </CardTitle>
+        <CardDescription>Track all your orders and shipments</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {orders.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <p>No orders yet. Place your first order to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {orders.map((order: any) => (
+              <Card key={order.id} className="shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-mono font-semibold">{order.id}</h4>
+                        <Badge 
+                          variant={
+                            order.status === "Delivered" ? "secondary" :
+                            order.status === "Shipped" ? "default" :
+                            order.status === "Approved" ? "outline" : "destructive"
+                          }
+                        >
+                          {order.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Ordered on {order.date}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold">{formatINR(order.grandTotal)}</p>
+                      <p className="text-xs text-muted-foreground">Incl. GST</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 mb-3">
+                    {order.products.map((product: any, idx: number) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{product.name} × {product.qty}</span>
+                        <span className="font-semibold">{formatINR(product.price * product.qty)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <Separator className="my-3" />
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {order.trackingId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedTracking(order);
+                          setTrackingDialogOpen(true);
+                        }}
+                      >
+                        <Truck className="h-3 w-3 mr-2" />
+                        Track Shipment
+                      </Button>
+                    )}
+                    {order.invoiceId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedInvoice(order);
+                          setInvoiceDialogOpen(true);
+                        }}
+                      >
+                        <FileText className="h-3 w-3 mr-2" />
+                        View Invoice
+                      </Button>
+                    )}
+                    {order.status === "Delivered" && !order.invoiceId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedInvoice(order);
+                          setInvoiceDialogOpen(true);
+                        }}
+                      >
+                        <Download className="h-3 w-3 mr-2" />
+                        Download Invoice
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
+);
+
+// CRM Tab Component
+const CRMTab = ({
+  customers, serviceRequests, setServiceRequests,
+  customerDialogOpen, setCustomerDialogOpen,
+  serviceDialogOpen, setServiceDialogOpen,
+  warrantyDialogOpen, setWarrantyDialogOpen,
+  newCustomer, setNewCustomer,
+  newServiceRequest, setNewServiceRequest,
+  warrantySearch, setWarrantySearch,
+  addCustomer, addServiceRequest
+}: any) => {
+  const foundWarranty = warrantySearch ? 
+    customers.flatMap((c: any) => c.warranties).find((w: any) => 
+      w.serialNumber.toLowerCase().includes(warrantySearch.toLowerCase())
+    ) : null;
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold">Customer Relationship Management</h2>
+          <p className="text-sm text-muted-foreground mt-1">Manage customers, warranties, and service requests</p>
+        </div>
+        <div className="flex gap-2">
+          <Dialog open={warrantyDialogOpen} onOpenChange={setWarrantyDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Search className="h-4 w-4 mr-2" />
+                Check Warranty
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Warranty Lookup</DialogTitle>
+                <DialogDescription>Search warranty by serial number</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Serial Number</Label>
+                  <Input
+                    value={warrantySearch}
+                    onChange={(e) => setWarrantySearch(e.target.value)}
+                    placeholder="SN123456789"
+                  />
+                </div>
+                
+                {foundWarranty && (
+                  <Card className={cn(
+                    "border-2",
+                    foundWarranty.status === "Active" ? "border-green-500 bg-green-50 dark:bg-green-950" :
+                    foundWarranty.status === "Expired" ? "border-orange-500 bg-orange-50 dark:bg-orange-950" :
+                    "border-red-500 bg-red-50 dark:bg-red-950"
+                  )}>
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Product:</span>
+                        <span className="font-semibold">{foundWarranty.productName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Purchase Date:</span>
+                        <span className="font-semibold">{foundWarranty.purchaseDate}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Expiry Date:</span>
+                        <span className="font-semibold">{foundWarranty.expiryDate}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Status:</span>
+                        <Badge variant={foundWarranty.status === "Active" ? "default" : "destructive"}>
+                          {foundWarranty.status}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {warrantySearch && !foundWarranty && (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p>No warranty found for this serial number</p>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setWarrantyDialogOpen(false)}>Close</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          <Dialog open={customerDialogOpen} onOpenChange={setCustomerDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-cta">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Customer
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>New Customer Registration</DialogTitle>
+                <DialogDescription>Register a new customer for warranty tracking</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div>
+                  <Label>Customer Name *</Label>
+                  <Input
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                    placeholder="Ravi Kumar"
+                  />
+                </div>
+                <div>
+                  <Label>Phone Number *</Label>
+                  <Input
+                    value={newCustomer.phone}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value.replace(/\D/g, "") })}
+                    maxLength={10}
+                    placeholder="9876543210"
+                  />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={newCustomer.email}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                    placeholder="customer@email.com"
+                  />
+                </div>
+                <div>
+                  <Label>Address</Label>
+                  <Textarea
+                    value={newCustomer.address}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                    placeholder="Plot No, Street, Area"
+                    rows={2}
+                  />
+                </div>
+                <div>
+                  <Label>City *</Label>
+                  <Input
+                    value={newCustomer.city}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
+                    placeholder="Warangal"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCustomerDialogOpen(false)}>Cancel</Button>
+                <Button onClick={addCustomer} className="bg-gradient-cta">Add Customer</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Customer List */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            Customer Database
+          </CardTitle>
+          <CardDescription>View and manage your customer base</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead className="text-right">Total Purchases</TableHead>
+                  <TableHead className="text-right">Warranties</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customers.map((customer: any) => (
+                  <TableRow key={customer.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-semibold">{customer.name}</p>
+                        <p className="text-xs text-muted-foreground">{customer.id}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <p>{customer.phone}</p>
+                        {customer.email && <p className="text-xs text-muted-foreground">{customer.email}</p>}
+                      </div>
+                    </TableCell>
+                    <TableCell>{customer.city}</TableCell>
+                    <TableCell className="text-right font-semibold">{formatINR(customer.totalPurchases)}</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline">{customer.warranties.length}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Service Requests */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="h-5 w-5 text-primary" />
+                Service Requests
+              </CardTitle>
+              <CardDescription>Manage customer complaints and service tickets</CardDescription>
+            </div>
+            <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-gradient-cta"><Plus className="mr-2 h-4 w-4" /> Place New Order</Button>
+                <Button size="sm" className="bg-gradient-cta">
+                  <MessageSquarePlus className="h-4 w-4 mr-2" />
+                  New Request
+                </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Order Stock from MSI</DialogTitle>
-                  <DialogDescription>Replenish inventory for your territory.</DialogDescription>
+                  <DialogTitle>Create Service Request</DialogTitle>
+                  <DialogDescription>Log a customer complaint or service need</DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-3 py-2">
-                  <div className="space-y-1.5">
-                    <Label>Product</Label>
-                    <Select value={orderProduct} onValueChange={setOrderProduct}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                <div className="grid gap-4">
+                  <div>
+                    <Label>Customer *</Label>
+                    <Select 
+                      value={newServiceRequest.customerId} 
+                      onValueChange={(v) => setNewServiceRequest({ ...newServiceRequest, customerId: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select customer" />
+                      </SelectTrigger>
                       <SelectContent>
-                        {products.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.name.en} — {formatINR(p.price)}</SelectItem>
+                        {customers.map((customer: any) => (
+                          <SelectItem key={customer.id} value={customer.id}>
+                            {customer.name} - {customer.phone}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Quantity</Label>
-                    <Input type="number" min={1} value={orderQty} onChange={(e) => setOrderQty(parseInt(e.target.value || "1"))} />
+                  <div>
+                    <Label>Type *</Label>
+                    <Select 
+                      value={newServiceRequest.type} 
+                      onValueChange={(v: any) => setNewServiceRequest({ ...newServiceRequest, type: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Complaint">Complaint</SelectItem>
+                        <SelectItem value="Warranty Claim">Warranty Claim</SelectItem>
+                        <SelectItem value="Installation">Installation Request</SelectItem>
+                        <SelectItem value="Repair">Repair Request</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="rounded-lg bg-secondary/50 p-3 text-sm">
-                    Total: <span className="font-bold text-primary">
-                      {formatINR((products.find((p) => p.id === orderProduct)?.price || 0) * orderQty)}
-                    </span>
+                  <div>
+                    <Label>Priority *</Label>
+                    <Select 
+                      value={newServiceRequest.priority} 
+                      onValueChange={(v: any) => setNewServiceRequest({ ...newServiceRequest, priority: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Low">Low</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="High">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Description *</Label>
+                    <Textarea
+                      value={newServiceRequest.description}
+                      onChange={(e) => setNewServiceRequest({ ...newServiceRequest, description: e.target.value })}
+                      placeholder="Describe the issue or request..."
+                      rows={4}
+                    />
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button onClick={placeOrder} className="bg-gradient-cta">Place Order</Button>
+                  <Button variant="outline" onClick={() => setServiceDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={addServiceRequest} className="bg-gradient-cta">Create Request</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
-        </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {serviceRequests.map((request: any) => (
+              <Card key={request.id} className="shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono font-semibold text-sm">{request.id}</span>
+                        <Badge variant="outline">{request.type}</Badge>
+                        <Badge 
+                          variant={
+                            request.priority === "High" ? "destructive" :
+                            request.priority === "Medium" ? "default" : "secondary"
+                          }
+                        >
+                          {request.priority}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium">{request.customerName}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Select 
+                        value={request.status} 
+                        onValueChange={(v: any) => {
+                          setServiceRequests(serviceRequests.map((sr: any) => 
+                            sr.id === request.id ? { ...sr, status: v } : sr
+                          ));
+                          toast.success(`Request ${request.id} status updated`);
+                        }}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Open">Open</SelectItem>
+                          <SelectItem value="In Progress">In Progress</SelectItem>
+                          <SelectItem value="Resolved">Resolved</SelectItem>
+                          <SelectItem value="Closed">Closed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Calendar className="h-3 w-3" />
+                    <span>Created: {request.date}</span>
+                    {request.resolvedDate && (
+                      <>
+                        <span>•</span>
+                        <CheckCircle className="h-3 w-3" />
+                        <span>Resolved: {request.resolvedDate}</span>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          {[
-            { icon: Boxes, label: "Stock on hand", value: `${totalUnits} units` },
-            { icon: Package, label: "Open orders", value: String(orders.filter(o => o.status === "Placed").length) },
-            { icon: IndianRupee, label: "MTD Sales", value: formatINR(mtdSales) },
-            { icon: Wrench, label: "Active tickets", value: String(tickets.filter(t => t.status !== "Resolved").length) },
-          ].map((s, i) => (
-            <Card key={i} className="shadow-card">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-cta text-primary-foreground">
-                  <s.icon className="h-6 w-6" />
+// Payments Tab Component
+const PaymentsTab = ({
+  creditInfo, transactions, orders,
+  paymentDialogOpen, setPaymentDialogOpen,
+  paymentForm, setPaymentForm, makePayment
+}: any) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-xl md:text-2xl font-bold">Payments & Ledger</h2>
+        <p className="text-sm text-muted-foreground mt-1">Manage payments and view transaction history</p>
+      </div>
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogTrigger asChild>
+          <Button className="bg-gradient-cta">
+            <Send className="h-4 w-4 mr-2" />
+            Make Payment
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Make Payment to MSI</DialogTitle>
+            <DialogDescription>Pay via UPI or Net Banking</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div>
+              <Label>Amount (₹) *</Label>
+              <Input
+                type="number"
+                min={1}
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                placeholder="10000"
+              />
+            </div>
+            <div>
+              <Label>Payment Method *</Label>
+              <Select 
+                value={paymentForm.method} 
+                onValueChange={(v: any) => setPaymentForm({ ...paymentForm, method: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UPI">UPI</SelectItem>
+                  <SelectItem value="Net Banking">Net Banking</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Order ID (Optional)</Label>
+              <Select 
+                value={paymentForm.orderId} 
+                onValueChange={(v) => setPaymentForm({ ...paymentForm, orderId: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select order (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {orders.filter((o: any) => o.status !== "Pending").map((order: any) => (
+                    <SelectItem key={order.id} value={order.id}>
+                      {order.id} - {formatINR(order.grandTotal)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                  <CreditCard className="h-5 w-5" />
+                  <span className="font-semibold">Credit Status</span>
                 </div>
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</div>
-                  <div className="text-xl font-bold">{s.value}</div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Outstanding:</span>
+                    <span className="font-semibold">{formatINR(creditInfo.outstanding)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Available Credit:</span>
+                    <span className="font-semibold">{formatINR(creditInfo.available)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>Cancel</Button>
+            <Button onClick={makePayment} className="bg-gradient-cta">
+              <Send className="h-4 w-4 mr-2" />
+              Proceed to Pay
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+
+    {/* Credit Overview */}
+    <div className="grid gap-4 md:grid-cols-3">
+      <Card className="shadow-card">
+        <CardContent className="p-5">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Credit Limit</div>
+          <div className="text-2xl font-bold">{formatINR(creditInfo.totalLimit)}</div>
+          <p className="text-xs text-muted-foreground mt-1">Total available</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card border-orange-300 dark:border-orange-800">
+        <CardContent className="p-5">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Outstanding</div>
+          <div className="text-2xl font-bold text-orange-600">{formatINR(creditInfo.outstanding)}</div>
+          <p className="text-xs text-muted-foreground mt-1">Pending payment</p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-card border-green-300 dark:border-green-800">
+        <CardContent className="p-5">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Available</div>
+          <div className="text-2xl font-bold text-green-600">{formatINR(creditInfo.available)}</div>
+          <p className="text-xs text-muted-foreground mt-1">Can be used</p>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Credit Utilization */}
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Activity className="h-5 w-5 text-primary" />
+          Credit Utilization
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Used</span>
+            <span className="font-semibold">{Math.round((creditInfo.outstanding / creditInfo.totalLimit) * 100)}%</span>
+          </div>
+          <Progress value={(creditInfo.outstanding / creditInfo.totalLimit) * 100} className="h-3" />
+          <p className="text-xs text-muted-foreground">
+            {formatINR(creditInfo.outstanding)} of {formatINR(creditInfo.totalLimit)} used
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Transaction History */}
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Receipt className="h-5 w-5 text-primary" />
+          Payment History
+        </CardTitle>
+        <CardDescription>Complete transaction ledger</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {transactions.map((transaction: any) => (
+            <Card key={transaction.id} className="shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full",
+                      transaction.type === "Payment" && transaction.amount > 0 ? "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300" :
+                      transaction.type === "Order" ? "bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300" :
+                      "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300"
+                    )}>
+                      {transaction.type === "Payment" ? <Receipt className="h-5 w-5" /> :
+                       transaction.type === "Order" ? <ShoppingCart className="h-5 w-5" /> :
+                       <IndianRupee className="h-5 w-5" />}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{transaction.type}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {transaction.date} • {transaction.method}
+                      </p>
+                      {transaction.reference && (
+                        <p className="text-xs text-muted-foreground font-mono">{transaction.reference}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={cn(
+                      "text-lg font-bold",
+                      transaction.amount > 0 ? "text-green-600" : "text-orange-600"
+                    )}>
+                      {transaction.amount > 0 ? "+" : ""}{formatINR(Math.abs(transaction.amount))}
+                    </p>
+                    <Badge 
+                      variant={
+                        transaction.status === "Success" ? "secondary" :
+                        transaction.status === "Pending" ? "default" : "destructive"
+                      }
+                      className="text-xs"
+                    >
+                      {transaction.status}
+                    </Badge>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+      </CardContent>
+    </Card>
+  </div>
+);
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="shadow-card">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Boxes className="h-5 w-5 text-primary" /> Inventory Tracking</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow><TableHead>Product</TableHead><TableHead>Price</TableHead><TableHead className="text-right">Stock</TableHead></TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stock.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell>{formatINR(s.price)}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={s.stock < 5 ? "destructive" : "secondary"}>{s.stock}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+// Marketing Tab Component
+const MarketingTab = ({ promotionalAssets, trainingResources }: any) => (
+  <div className="space-y-6">
+    <div>
+      <h2 className="text-xl md:text-2xl font-bold">Marketing & Support</h2>
+      <p className="text-sm text-muted-foreground mt-1">Access promotional materials and training resources</p>
+    </div>
 
-          <Card className="shadow-card">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-primary" /> My Orders to MSI</CardTitle></CardHeader>
-            <CardContent>
-              {orders.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">No orders placed yet. Click "Place New Order" to restock.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow><TableHead>Order #</TableHead><TableHead>Product</TableHead><TableHead>Qty</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead></TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((o) => (
-                      <TableRow key={o.id}>
-                        <TableCell className="font-mono text-xs">{o.id}</TableCell>
-                        <TableCell>{o.product}</TableCell>
-                        <TableCell>{o.qty}</TableCell>
-                        <TableCell>{formatINR(o.total)}</TableCell>
-                        <TableCell><Badge>{o.status}</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-card lg:col-span-2">
-            <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" /> Installation Entries (Warranty Register)</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow><TableHead>Customer</TableHead><TableHead>Phone</TableHead><TableHead>Location</TableHead><TableHead>Product</TableHead><TableHead>Date</TableHead></TableRow>
-                </TableHeader>
-                <TableBody>
-                  {installs.map((i) => (
-                    <TableRow key={i.id}>
-                      <TableCell className="font-medium">{i.customer}</TableCell>
-                      <TableCell>{i.phone}</TableCell>
-                      <TableCell>{i.location}</TableCell>
-                      <TableCell>{i.product}</TableCell>
-                      <TableCell>{i.date}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-card lg:col-span-2">
-            <CardHeader><CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5 text-primary" /> Service Requests</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow><TableHead>Ticket</TableHead><TableHead>Customer</TableHead><TableHead>Issue</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tickets.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell className="font-mono text-xs">{t.id}</TableCell>
-                      <TableCell>{t.customer}</TableCell>
-                      <TableCell>{t.issue}</TableCell>
-                      <TableCell>
-                        <Badge variant={t.status === "Resolved" ? "secondary" : t.status === "Open" ? "destructive" : "default"}>{t.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Select value={t.status} onValueChange={(v) => updateTicketStatus(t.id, v as Ticket["status"])}>
-                          <SelectTrigger className="h-8 w-36 ml-auto"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Open">Open</SelectItem>
-                            <SelectItem value="In Progress">In Progress</SelectItem>
-                            <SelectItem value="Resolved">Resolved</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+    {/* Promotional Assets */}
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Star className="h-5 w-5 text-primary" />
+          Promotional Assets Library
+        </CardTitle>
+        <CardDescription>Download marketing materials for your territory</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {promotionalAssets.map((asset: any) => (
+            <Card key={asset.id} className="shadow-sm overflow-hidden">
+              <div className="aspect-video bg-secondary flex items-center justify-center">
+                {asset.type === "Video" ? (
+                  <PlayCircle className="h-12 w-12 text-muted-foreground" />
+                ) : asset.type === "Poster" ? (
+                  <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                ) : (
+                  <FileText className="h-12 w-12 text-muted-foreground" />
+                )}
+              </div>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h4 className="font-semibold text-sm line-clamp-2">{asset.title}</h4>
+                  <Badge variant="outline" className="flex-shrink-0 text-xs">{asset.type}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  {asset.category} • {asset.date}
+                </p>
+                <Button size="sm" className="w-full" onClick={() => toast.success("Download started!")}>
+                  <Download className="h-3 w-3 mr-2" />
+                  Download
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-      </section>
-    </SiteLayout>
-  );
-};
+      </CardContent>
+    </Card>
+
+    {/* Training Resources */}
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Video className="h-5 w-5 text-primary" />
+          Training Resources
+        </CardTitle>
+        <CardDescription>Video tutorials and product guides</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {trainingResources.map((resource: any) => (
+            <Card key={resource.id} className="shadow-sm overflow-hidden">
+              <div className="aspect-video bg-secondary flex items-center justify-center relative">
+                <PlayCircle className="h-16 w-16 text-primary cursor-pointer hover:scale-110 transition-transform" />
+              </div>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h4 className="font-semibold text-sm line-clamp-2">{resource.title}</h4>
+                  <Badge variant="outline" className="flex-shrink-0 text-xs">{resource.duration}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">{resource.category}</p>
+                <Button size="sm" className="w-full" onClick={() => toast.success("Opening video...")}>
+                  <PlayCircle className="h-3 w-3 mr-2" />
+                  Watch Now
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Help Desk */}
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <HelpCircle className="h-5 w-5 text-primary" />
+          Help Desk Integration
+        </CardTitle>
+        <CardDescription>Get support from MSI technical team</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Button className="h-auto py-6 flex-col gap-2" variant="outline">
+            <Phone className="h-8 w-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold">Call Support</p>
+              <p className="text-xs text-muted-foreground">1800-123-4567</p>
+            </div>
+          </Button>
+          
+          <Button className="h-auto py-6 flex-col gap-2" variant="outline">
+            <MessageCircle className="h-8 w-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold">Live Chat</p>
+              <p className="text-xs text-muted-foreground">Chat with expert</p>
+            </div>
+          </Button>
+          
+          <Button className="h-auto py-6 flex-col gap-2" variant="outline">
+            <Mail className="h-8 w-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold">Email Support</p>
+              <p className="text-xs text-muted-foreground">support@msi.com</p>
+            </div>
+          </Button>
+          
+          <Button className="h-auto py-6 flex-col gap-2" variant="outline">
+            <HelpCircle className="h-8 w-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold">FAQs</p>
+              <p className="text-xs text-muted-foreground">Common questions</p>
+            </div>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
+
+// Notifications Tab Component
+const NotificationsTab = ({ notifications, markNotificationRead, markAllNotificationsRead }: any) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <div>
+        <h2 className="text-xl md:text-2xl font-bold">Notifications</h2>
+        <p className="text-sm text-muted-foreground mt-1">Stay updated with latest news and alerts</p>
+      </div>
+      {notifications.some((n: any) => !n.read) && (
+        <Button variant="outline" size="sm" onClick={markAllNotificationsRead}>
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Mark All Read
+        </Button>
+      )}
+    </div>
+
+    <div className="space-y-3">
+      {notifications.map((notification: any) => (
+        <Card 
+          key={notification.id} 
+          className={cn(
+            "shadow-sm cursor-pointer transition-all",
+            !notification.read && "border-l-4 border-l-primary bg-secondary/30"
+          )}
+          onClick={() => !notification.read && markNotificationRead(notification.id)}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0",
+                notification.type === "Promo" ? "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300" :
+                notification.type === "Alert" ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300" :
+                notification.type === "Update" ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300" :
+                "bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300"
+              )}>
+                {notification.type === "Promo" ? <Star className="h-5 w-5" /> :
+                 notification.type === "Alert" ? <AlertCircle className="h-5 w-5" /> :
+                 notification.type === "Update" ? <Bell className="h-5 w-5" /> :
+                 <Zap className="h-5 w-5" />}
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h4 className="font-semibold text-sm">{notification.title}</h4>
+                  {!notification.read && (
+                    <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1" />
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">{notification.message}</p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Calendar className="h-3 w-3" />
+                  <span>{notification.date}</span>
+                  <Badge variant="outline" className="text-xs">{notification.type}</Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+
+    {notifications.length === 0 && (
+      <Card className="shadow-card">
+        <CardContent className="p-12 text-center text-muted-foreground">
+          <Bell className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p>No notifications yet</p>
+        </CardContent>
+      </Card>
+    )}
+  </div>
+);
 
 export default Dealer;
