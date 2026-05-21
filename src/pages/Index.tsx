@@ -1,16 +1,88 @@
 import { SiteLayout } from "@/components/SiteLayout";
 import { HeroCarousel, FeatureStrip } from "@/components/Hero";
-import { products } from "@/data/products";
 import { ProductCard } from "@/components/ProductCard";
 import { useI18n } from "@/contexts/I18nContext";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Award } from "lucide-react";
+import { useState, useEffect } from "react";
+import { productService, Product as APIProduct } from "@/services/product.service";
+import { Skeleton } from "@/components/ui/skeleton";
+import productMotorRobo from "@/assets/product-motor-robo.jpg";
+import productAntiScaling from "@/assets/product-anti-scaling.jpg";
+import productSubmersible from "@/assets/product-submersible.jpg";
+import productSensor from "@/assets/product-sensor.jpg";
+
+// Static images array - use these for all products
+const staticImages = [
+  productMotorRobo,
+  productAntiScaling,
+  productSubmersible,
+  productSensor,
+];
+
+// Transform API product to match local Product type
+const transformProduct = (apiProduct: APIProduct, index: number) => ({
+  id: apiProduct._id,
+  name: apiProduct.name,
+  tagline: { en: apiProduct.category, te: apiProduct.category },
+  description: apiProduct.description,
+  price: apiProduct.basePrice,
+  image: staticImages[index % staticImages.length],
+});
 
 const Index = () => {
   const { t } = useI18n();
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadFeaturedProducts();
+  }, []);
+
+  const loadFeaturedProducts = async () => {
+    try {
+      const response = await productService.getFeaturedProducts();
+      setProducts(response.data.slice(0, 4).map((product, index) => transformProduct(product, index)));
+    } catch (error) {
+      console.error("Failed to load featured products:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SiteLayout>
+      {/* Awards & Recognitions Marquee */}
+      <div className="bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border-y border-primary/20 py-3 overflow-hidden">
+        <div className="animate-marquee whitespace-nowrap flex items-center gap-8">
+          {[...Array(3)].map((_, idx) => (
+            <div key={idx} className="inline-flex items-center gap-8">
+              <span className="inline-flex items-center gap-2 font-semibold text-sm">
+                <Award className="h-5 w-5 text-primary" />
+                ISO 9001:2015 Certified
+              </span>
+              <span className="inline-flex items-center gap-2 font-semibold text-sm">
+                <Award className="h-5 w-5 text-accent" />
+                Best Water Solutions Provider 2025
+              </span>
+              <span className="inline-flex items-center gap-2 font-semibold text-sm">
+                <Award className="h-5 w-5 text-primary" />
+                5000+ Happy Customers
+              </span>
+              <span className="inline-flex items-center gap-2 font-semibold text-sm">
+                <Award className="h-5 w-5 text-accent" />
+                Trusted by 500+ Dealers
+              </span>
+              <span className="inline-flex items-center gap-2 font-semibold text-sm">
+                <Award className="h-5 w-5 text-primary" />
+                Excellence in Innovation Award
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <HeroCarousel />
       <FeatureStrip />
 
@@ -24,9 +96,22 @@ const Index = () => {
             <Link to="/products">View all <ArrowRight className="ml-2 h-4 w-4" /></Link>
           </Button>
         </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {products.map((p) => <ProductCard key={p.id} product={p} />)}
-        </div>
+
+        {loading ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="space-y-3">
+                <Skeleton className="h-48 w-full rounded-lg" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {products.map((p) => <ProductCard key={p.id} product={p} />)}
+          </div>
+        )}
       </section>
 
       <section className="container pb-24">

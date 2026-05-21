@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,6 +20,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { inventoryService } from "@/services/inventory.service";
 
 type InventoryItem = {
     id: string;
@@ -50,35 +51,13 @@ type ProductionStatus = {
     expectedCompletion: string;
 };
 
-const initialInventory: InventoryItem[] = [
-    { id: "INV001", name: "Smart Water Motor Robo", quantity: 145, minStock: 50, unit: "pcs", lastUpdated: "2026-05-10" },
-    { id: "INV002", name: "Anti-Scaling Unit", quantity: 89, minStock: 30, unit: "pcs", lastUpdated: "2026-05-09" },
-    { id: "INV003", name: "Water Level Controller", quantity: 234, minStock: 100, unit: "pcs", lastUpdated: "2026-05-08" },
-    { id: "INV004", name: "Motor Controller Pro", quantity: 67, minStock: 40, unit: "pcs", lastUpdated: "2026-05-11" },
-    { id: "INV005", name: "Smart Pump System", quantity: 28, minStock: 50, unit: "pcs", lastUpdated: "2026-05-10" },
-];
-
-const initialRawMaterials: RawMaterial[] = [
-    { id: "RM001", name: "PCB Boards", quantity: 500, minStock: 100, unit: "pcs", supplier: "TechSupply Co", lastOrder: "2026-04-01" },
-    { id: "RM002", name: "Microcontrollers", quantity: 300, minStock: 50, unit: "pcs", supplier: "ElectroMart", lastOrder: "2026-03-28" },
-    { id: "RM003", name: "Plastic Casing", quantity: 85, minStock: 200, unit: "pcs", supplier: "PlasticWorks Ltd", lastOrder: "2026-03-15" },
-    { id: "RM004", name: "Wiring Harness", quantity: 800, minStock: 300, unit: "meters", supplier: "WireSupply Inc", lastOrder: "2026-04-10" },
-    { id: "RM005", name: "Sensors", quantity: 450, minStock: 150, unit: "pcs", supplier: "SensorTech", lastOrder: "2026-04-05" },
-];
-
-const initialProduction: ProductionStatus[] = [
-    { id: "PROD001", productName: "Smart Water Motor Robo", batchNumber: "BATCH-2026-051", quantity: 50, status: "In Progress", startDate: "2026-05-08", expectedCompletion: "2026-05-15" },
-    { id: "PROD002", productName: "Anti-Scaling Unit", batchNumber: "BATCH-2026-052", quantity: 30, status: "Quality Check", startDate: "2026-05-05", expectedCompletion: "2026-05-12" },
-    { id: "PROD003", productName: "Water Level Controller", batchNumber: "BATCH-2026-053", quantity: 100, status: "Packaging", startDate: "2026-05-03", expectedCompletion: "2026-05-11" },
-    { id: "PROD004", productName: "Motor Controller Pro", batchNumber: "BATCH-2026-054", quantity: 25, status: "Completed", startDate: "2026-05-01", expectedCompletion: "2026-05-09" },
-];
-
 const EmployeeProduction = () => {
     const { user } = useAuth();
     const { hasPermission } = usePermissions();
-    const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
-    const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>(initialRawMaterials);
-    const [production, setProduction] = useState<ProductionStatus[]>(initialProduction);
+    const [inventory, setInventory] = useState<InventoryItem[]>([]);
+    const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+    const [production, setProduction] = useState<ProductionStatus[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<"inventory" | "raw-materials" | "production">("inventory");
     const [editDialog, setEditDialog] = useState<{ open: boolean; item: InventoryItem | RawMaterial | null; type: "inventory" | "raw" }>({
         open: false,
@@ -86,15 +65,72 @@ const EmployeeProduction = () => {
         type: "inventory"
     });
 
-    const lowStockInventory = inventory.filter(item => item.quantity < item.minStock);
-    const lowStockMaterials = rawMaterials.filter(item => item.quantity < item.minStock);
-    const activeProduction = production.filter(p => p.status !== "Completed");
+    useEffect(() => {
+        loadAllData();
+    }, []);
 
-    const handleUpdateQuantity = (id: string, newQuantity: number, type: "inventory" | "raw") => {
+    const loadAllData = async () => {
+        try {
+            setLoading(true);
+
+            // Load inventory from API
+            const inventoryResponse = await inventoryService.getAllInventory({ limit: 100 });
+            setInventory(inventoryResponse.data.map(inv => ({
+                id: inv._id,
+                name: inv.productId.name?.en || 'Product',
+                quantity: inv.currentStock,
+                minStock: inv.productId.minStockLevel || 10,
+                unit: "pcs",
+                lastUpdated: new Date(inv.lastUpdated).toISOString().split('T')[0]
+            })));
+
+            // Mock production data (no production API yet)
+            setProduction([
+                { id: "PROD001", productName: "Smart Water Motor Robo", batchNumber: "BATCH-2026-051", quantity: 50, status: "In Progress", startDate: "2026-05-08", expectedCompletion: "2026-05-15" },
+                { id: "PROD002", productName: "Anti-Scaling Unit", batchNumber: "BATCH-2026-052", quantity: 30, status: "Quality Check", startDate: "2026-05-05", expectedCompletion: "2026-05-12" },
+                { id: "PROD003", productName: "Water Level Controller", batchNumber: "BATCH-2026-053", quantity: 100, status: "Packaging", startDate: "2026-05-03", expectedCompletion: "2026-05-11" },
+                { id: "PROD004", productName: "Motor Controller Pro", batchNumber: "BATCH-2026-054", quantity: 25, status: "Completed", startDate: "2026-05-01", expectedCompletion: "2026-05-09" },
+            ]);
+
+            // Mock raw materials (no raw materials API yet)
+            setRawMaterials([
+                { id: "RM001", name: "PCB Boards", quantity: 500, minStock: 100, unit: "pcs", supplier: "TechSupply Co", lastOrder: "2026-04-01" },
+                { id: "RM002", name: "Microcontrollers", quantity: 300, minStock: 50, unit: "pcs", supplier: "ElectroMart", lastOrder: "2026-03-28" },
+                { id: "RM003", name: "Plastic Casing", quantity: 85, minStock: 200, unit: "pcs", supplier: "PlasticWorks Ltd", lastOrder: "2026-03-15" },
+                { id: "RM004", name: "Wiring Harness", quantity: 800, minStock: 300, unit: "meters", supplier: "WireSupply Inc", lastOrder: "2026-04-10" },
+                { id: "RM005", name: "Sensors", quantity: 450, minStock: 150, unit: "pcs", supplier: "SensorTech", lastOrder: "2026-04-05" },
+            ]);
+
+        } catch (error: any) {
+            console.error('Failed to load inventory:', error);
+            toast.error('Failed to load inventory data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdateQuantity = async (id: string, newQuantity: number, type: "inventory" | "raw") => {
         if (type === "inventory") {
-            setInventory(inventory.map(item =>
-                item.id === id ? { ...item, quantity: newQuantity, lastUpdated: new Date().toISOString().split('T')[0] } : item
-            ));
+            try {
+                // Call API to update stock
+                const inventoryItem = inventory.find(i => i.id === id);
+                if (inventoryItem) {
+                    await inventoryService.updateStock(id, {
+                        movementType: newQuantity > inventoryItem.quantity ? "IN" : "OUT",
+                        quantity: Math.abs(newQuantity - inventoryItem.quantity),
+                        notes: "Manual adjustment"
+                    });
+                }
+
+                setInventory(inventory.map(item =>
+                    item.id === id ? { ...item, quantity: newQuantity, lastUpdated: new Date().toISOString().split('T')[0] } : item
+                ));
+                toast.success("Inventory updated successfully");
+                await loadAllData(); // Reload to get fresh data
+            } catch (error: any) {
+                toast.error('Failed to update inventory');
+                console.error(error);
+            }
             toast.success("Inventory updated successfully");
         } else {
             setRawMaterials(rawMaterials.map(item =>
@@ -111,6 +147,23 @@ const EmployeeProduction = () => {
         ));
         toast.success("Production status updated");
     };
+
+    const lowStockInventory = inventory.filter(item => item.quantity < item.minStock);
+    const lowStockMaterials = rawMaterials.filter(item => item.quantity < item.minStock);
+    const activeProduction = production.filter(p => p.status !== "Completed");
+
+    if (loading) {
+        return (
+            <SiteLayout>
+                <div className="container py-12 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading production data...</p>
+                    </div>
+                </div>
+            </SiteLayout>
+        );
+    }
 
     const getStatusColor = (status: ProductionStatus["status"]) => {
         switch (status) {

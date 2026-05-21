@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,6 +21,8 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatINR } from "@/data/products";
+import { dealerService } from "@/services/dealer.service";
+import { orderService } from "@/services/order.service";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 type Dealer = {
@@ -47,50 +49,83 @@ type Order = {
     date: string;
 };
 
-const initialDealers: Dealer[] = [
-    { id: "1", code: "DLR001", name: "Suresh Agro Distributors", city: "Warangal", phone: "9876543210", email: "suresh@agro.com", status: "Approved", creditLimit: 500000, outstanding: 125000, totalOrders: 45, totalRevenue: 2340000 },
-    { id: "2", code: "DLR002", name: "Krishna Pumps", city: "Vijayawada", phone: "9876500011", email: "krishna@pumps.com", status: "Approved", creditLimit: 300000, outstanding: 85000, totalOrders: 32, totalRevenue: 1650000 },
-    { id: "3", code: "DLR003", name: "Sai Irrigation", city: "Tirupati", phone: "9876500022", email: "sai@irrigation.com", status: "Pending", creditLimit: 200000, outstanding: 0, totalOrders: 0, totalRevenue: 0 },
-    { id: "4", code: "DLR004", name: "Reddy Trade Links", city: "Nellore", phone: "9876500033", email: "reddy@trade.com", status: "Pending", creditLimit: 250000, outstanding: 0, totalOrders: 0, totalRevenue: 0 },
-    { id: "5", code: "DLR005", name: "Venkat Enterprises", city: "Guntur", phone: "9876500044", email: "venkat@ent.com", status: "Approved", creditLimit: 400000, outstanding: 156000, totalOrders: 38, totalRevenue: 1980000 },
-];
-
-const initialOrders: Order[] = [
-    { id: "ORD001", dealerId: "1", dealerName: "Suresh Agro Distributors", items: [{ product: "Smart Water Motor Robo", qty: 10, price: 12500 }], total: 125000, status: "Delivered", date: "2026-04-15" },
-    { id: "ORD002", dealerId: "2", dealerName: "Krishna Pumps", items: [{ product: "Anti-Scaling Unit", qty: 5, price: 8500 }], total: 42500, status: "Shipped", date: "2026-04-28" },
-    { id: "ORD003", dealerId: "5", dealerName: "Venkat Enterprises", items: [{ product: "Smart Water Motor Robo", qty: 15, price: 12500 }], total: 187500, status: "Approved", date: "2026-05-02" },
-    { id: "ORD004", dealerId: "1", dealerName: "Suresh Agro Distributors", items: [{ product: "Anti-Scaling Unit", qty: 8, price: 8500 }], total: 68000, status: "Pending", date: "2026-05-05" },
-    { id: "ORD005", dealerId: "3", dealerName: "Sai Irrigation", items: [{ product: "Water Level Controller", qty: 12, price: 6500 }], total: 78000, status: "Pending", date: "2026-05-10" },
-];
-
-const salesData = [
-    { month: "Jan", revenue: 980000, orders: 48 },
-    { month: "Feb", revenue: 1450000, orders: 72 },
-    { month: "Mar", revenue: 1680000, orders: 85 },
-    { month: "Apr", revenue: 1920000, orders: 95 },
-    { month: "May", revenue: 856000, orders: 42 },
-];
-
-const dealerPerformance = [
-    { name: "Suresh Agro", value: 2340000, color: "#10b981" },
-    { name: "Venkat Ent.", value: 1980000, color: "#3b82f6" },
-    { name: "Krishna Pumps", value: 1650000, color: "#f59e0b" },
-    { name: "Others", value: 980000, color: "#6366f1" },
-];
-
 const EmployeeSales = () => {
     const { user } = useAuth();
     const { hasPermission } = usePermissions();
-    const [dealers, setDealers] = useState<Dealer[]>(initialDealers);
-    const [orders, setOrders] = useState<Order[]>(initialOrders);
+    const [dealers, setDealers] = useState<Dealer[]>([]);
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<"dealers" | "orders" | "performance">("dealers");
     const [dealerDialog, setDealerDialog] = useState<{ open: boolean; dealer: Dealer | null }>({ open: false, dealer: null });
     const [orderDialog, setOrderDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
 
-    const pendingDealers = dealers.filter(d => d.status === "Pending");
-    const pendingOrders = orders.filter(o => o.status === "Pending");
-    const totalRevenue = orders.filter(o => o.status === "Delivered").reduce((sum, o) => sum + o.total, 0);
-    const approvedDealers = dealers.filter(d => d.status === "Approved");
+    useEffect(() => {
+        loadAllData();
+    }, []);
+
+    const loadAllData = async () => {
+        try {
+            setLoading(true);
+
+            // Load dealers from API
+            const dealersResponse = await dealerService.getDealers({ limit: 100 });
+            setDealers(dealersResponse.data.map(d => ({
+                id: d._id,
+                code: d.dealerCode,
+                name: d.name,
+                city: d.address?.city || '',
+                phone: d.mobile,
+                email: d.email || '',
+                status: d.approvalStatus as "Pending" | "Approved" | "Suspended",
+                creditLimit: d.creditLimit,
+                outstanding: d.outstandingAmount || 0,
+                totalOrders: 0,
+                totalRevenue: 0
+            })));
+
+            // Load orders from API
+            const ordersResponse = await orderService.getOrders({ limit: 100 });
+            setOrders(ordersResponse.data.map(o => ({
+                id: o._id,
+                dealerId: o.userId,
+                dealerName: 'Dealer',
+                items: o.items.map(item => ({
+                    product: item.productId.name?.en || 'Product',
+                    qty: item.quantity,
+                    price: item.price
+                })),
+                total: o.totalAmount,
+                status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered" | "Rejected",
+                date: new Date(o.createdAt).toISOString().split('T')[0]
+            })));
+
+        } catch (error: any) {
+            console.error('Failed to load sales data:', error);
+            toast.error('Failed to load sales data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const salesData = [
+        { month: "Jan", revenue: 980000, orders: 48 },
+        { month: "Feb", revenue: 1450000, orders: 72 },
+        { month: "Mar", revenue: 1680000, orders: 85 },
+        { month: "Apr", revenue: 1920000, orders: 95 },
+        { month: "May", revenue: 856000, orders: 42 },
+    ];
+
+    const dealerPerformance = [
+        { name: "Suresh Agro", value: 2340000, color: "#10b981" },
+        { name: "Venkat Ent.", value: 1980000, color: "#3b82f6" },
+        { name: "Krishna Pumps", value: 1650000, color: "#f59e0b" },
+        { name: "Others", value: 980000, color: "#6366f1" },
+    ];
+
+    const handleUpdateOrderStatus = (orderId: string, newStatus: Order["status"]) => {
+        setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+        toast.success("Order status updated");
+    };
 
     const handleApproveDealerWithPermissions = (dealerId: string) => {
         if (!hasPermission(PERMISSIONS.MANAGE_DEALERS)) {
@@ -101,14 +136,23 @@ const EmployeeSales = () => {
         toast.success("Dealer approved successfully");
     };
 
-    const handleUpdateOrderStatus = (orderId: string, newStatus: Order["status"]) => {
-        if (!hasPermission(PERMISSIONS.MANAGE_ORDERS)) {
-            toast.error("You don't have permission to update orders");
-            return;
-        }
-        setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-        toast.success(`Order ${newStatus.toLowerCase()} successfully`);
-    };
+    const pendingDealers = dealers.filter(d => d.status === "Pending");
+    const pendingOrders = orders.filter(o => o.status === "Pending");
+    const totalRevenue = orders.filter(o => o.status === "Delivered").reduce((sum, o) => sum + o.total, 0);
+    const approvedDealers = dealers.filter(d => d.status === "Approved");
+
+    if (loading) {
+        return (
+            <SiteLayout>
+                <div className="container py-12 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading sales data...</p>
+                    </div>
+                </div>
+            </SiteLayout>
+        );
+    }
 
     const handleAddDealer = (newDealer: Omit<Dealer, "id" | "code" | "totalOrders" | "totalRevenue">) => {
         const newCode = `DLR${String(dealers.length + 1).padStart(3, '0')}`;

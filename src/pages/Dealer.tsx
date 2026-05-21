@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,6 +23,8 @@ import {
 import { cn } from "@/lib/utils";
 import { formatINR, products } from "@/data/products";
 import { toast } from "sonner";
+import { productService } from "@/services/product.service";
+import { orderService } from "@/services/order.service";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -133,269 +135,7 @@ type Notification = {
   read: boolean;
 };
 
-// Initial Data
-const initialStock: DealerStock[] = products.map((p, i) => ({
-  id: p.id,
-  name: p.name.en,
-  price: p.price,
-  localStock: [12, 5, 2, 18][i],
-  parentStock: [150, 80, 45, 200][i],
-  minStock: [10, 5, 5, 15][i],
-  category: "Electronics",
-  image: p.image,
-}));
-
-const initialOrders: DealerOrder[] = [
-  {
-    id: "ORD-2451",
-    products: [{ id: "1", name: "Smart Water Motor Robo", qty: 10, price: 12500 }],
-    total: 125000,
-    gst: 22500,
-    grandTotal: 147500,
-    status: "Delivered",
-    date: "2026-04-15",
-    trackingId: "TRK789456123",
-    courier: "Blue Dart",
-    invoiceId: "INV-2451",
-  },
-  {
-    id: "ORD-2458",
-    products: [{ id: "2", name: "Anti-Scaling Unit", qty: 5, price: 8500 }],
-    total: 42500,
-    gst: 7650,
-    grandTotal: 50150,
-    status: "Shipped",
-    date: "2026-04-28",
-    trackingId: "TRK789456124",
-    courier: "DTDC",
-    eta: "2026-05-12",
-    shippingStatus: "In Transit - Hyderabad Hub",
-  },
-  {
-    id: "ORD-2462",
-    products: [{ id: "1", name: "Smart Water Motor Robo", qty: 15, price: 12500 }],
-    total: 187500,
-    gst: 33750,
-    grandTotal: 221250,
-    status: "Approved",
-    date: "2026-05-02",
-  },
-];
-
-const initialCustomers: Customer[] = [
-  {
-    id: "CUST001",
-    name: "Ravi Kumar",
-    phone: "9876543210",
-    email: "ravi.kumar@email.com",
-    address: "Plot No 45, Hanamkonda",
-    city: "Warangal",
-    totalPurchases: 38500,
-    lastPurchase: "2026-04-22",
-    warranties: [
-      {
-        id: "WR001",
-        productName: "Smart Water Motor Robo",
-        serialNumber: "SN123456789",
-        purchaseDate: "2026-04-22",
-        expiryDate: "2028-04-22",
-        status: "Active",
-      },
-    ],
-  },
-  {
-    id: "CUST002",
-    name: "Lakshmi Devi",
-    phone: "9988711223",
-    email: "lakshmi@email.com",
-    address: "Main Road, Khammam",
-    city: "Khammam",
-    totalPurchases: 21500,
-    lastPurchase: "2026-04-18",
-    warranties: [
-      {
-        id: "WR002",
-        productName: "Submersible Pump",
-        serialNumber: "SN987654321",
-        purchaseDate: "2026-04-18",
-        expiryDate: "2028-04-18",
-        status: "Active",
-      },
-    ],
-  },
-  {
-    id: "CUST003",
-    name: "Suresh Reddy",
-    phone: "9876501234",
-    address: "Nalgonda",
-    city: "Nalgonda",
-    totalPurchases: 15000,
-    warranties: [],
-  },
-];
-
-const initialServiceRequests: ServiceRequest[] = [
-  {
-    id: "SR-1041",
-    customerId: "CUST001",
-    customerName: "Ravi Kumar",
-    type: "Complaint",
-    description: "Display flickering on controller unit",
-    status: "In Progress",
-    priority: "High",
-    date: "2026-05-03",
-  },
-  {
-    id: "SR-1038",
-    customerId: "CUST002",
-    customerName: "Lakshmi Devi",
-    type: "Warranty Claim",
-    description: "Pump motor not starting - within warranty period",
-    status: "Open",
-    priority: "Medium",
-    date: "2026-05-06",
-  },
-  {
-    id: "SR-1029",
-    customerId: "CUST003",
-    customerName: "Suresh Reddy",
-    type: "Installation",
-    description: "Request for installation assistance",
-    status: "Resolved",
-    priority: "Low",
-    date: "2026-04-25",
-    resolvedDate: "2026-04-26",
-  },
-];
-
-const initialTransactions: PaymentTransaction[] = [
-  {
-    id: "TXN-5401",
-    type: "Payment",
-    amount: 147500,
-    date: "2026-04-20",
-    method: "Net Banking",
-    status: "Success",
-    orderId: "ORD-2451",
-    reference: "HDFC2345678",
-  },
-  {
-    id: "TXN-5402",
-    type: "Order",
-    amount: -50150,
-    date: "2026-04-28",
-    method: "Credit",
-    status: "Pending",
-    orderId: "ORD-2458",
-  },
-  {
-    id: "TXN-5403",
-    type: "Commission",
-    amount: 7375,
-    date: "2026-04-30",
-    method: "Credit",
-    status: "Success",
-    reference: "Commission for April",
-  },
-];
-
-const initialCreditInfo: CreditInfo = {
-  totalLimit: 500000,
-  outstanding: 221250,
-  available: 278750,
-};
-
-const initialPromotionalAssets: PromotionalAsset[] = [
-  {
-    id: "PA001",
-    title: "Summer Bonanza Offer",
-    type: "Poster",
-    category: "Seasonal",
-    thumbnail: "/api/placeholder/300/400",
-    downloadUrl: "#",
-    date: "2026-05-01",
-  },
-  {
-    id: "PA002",
-    title: "Smart Motor Robo Product Launch",
-    type: "Video",
-    category: "Product",
-    thumbnail: "/api/placeholder/300/400",
-    downloadUrl: "#",
-    date: "2026-04-15",
-  },
-  {
-    id: "PA003",
-    title: "Dealer Scheme Q2 2026",
-    type: "Brochure",
-    category: "Scheme",
-    thumbnail: "/api/placeholder/300/400",
-    downloadUrl: "#",
-    date: "2026-04-01",
-  },
-];
-
-const initialTrainingResources: TrainingResource[] = [
-  {
-    id: "TR001",
-    title: "Installing Smart Water Motor Robo",
-    category: "Installation",
-    duration: "12:45",
-    thumbnail: "/api/placeholder/300/200",
-    videoUrl: "#",
-  },
-  {
-    id: "TR002",
-    title: "Troubleshooting Common Controller Issues",
-    category: "Troubleshooting",
-    duration: "18:30",
-    thumbnail: "/api/placeholder/300/200",
-    videoUrl: "#",
-  },
-  {
-    id: "TR003",
-    title: "Motor Repair and Maintenance",
-    category: "Repair",
-    duration: "25:15",
-    thumbnail: "/api/placeholder/300/200",
-    videoUrl: "#",
-  },
-];
-
-const initialNotifications: Notification[] = [
-  {
-    id: "NOT001",
-    title: "New Product Launch Alert",
-    message: "Introducing Smart Water Level Controller v2.0 with IoT capabilities!",
-    type: "Update",
-    date: "2026-05-08",
-    read: false,
-  },
-  {
-    id: "NOT002",
-    title: "Summer Discount Scheme",
-    message: "Get 15% extra commission on orders above ₹2 lakhs this month!",
-    type: "Promo",
-    date: "2026-05-05",
-    read: false,
-  },
-  {
-    id: "NOT003",
-    title: "Payment Reminder",
-    message: "Outstanding payment of ₹2,21,250 is pending. Please clear dues.",
-    type: "Alert",
-    date: "2026-05-03",
-    read: true,
-  },
-  {
-    id: "NOT004",
-    title: "Dealer Training Program",
-    message: "Join our virtual training session on May 15th at 10 AM.",
-    type: "Update",
-    date: "2026-05-01",
-    read: true,
-  },
-];
+// Type Definitions
 
 // Chart Data
 const salesTrendData = [
@@ -419,18 +159,23 @@ const commissionData = [
 const Dealer = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
-  
+  const [loading, setLoading] = useState(true);
+
   // State Management
-  const [stock, setStock] = useState<DealerStock[]>(initialStock);
-  const [orders, setOrders] = useState<DealerOrder[]>(initialOrders);
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>(initialServiceRequests);
-  const [transactions, setTransactions] = useState<PaymentTransaction[]>(initialTransactions);
-  const [creditInfo, setCreditInfo] = useState<CreditInfo>(initialCreditInfo);
-  const [promotionalAssets] = useState<PromotionalAsset[]>(initialPromotionalAssets);
-  const [trainingResources] = useState<TrainingResource[]>(initialTrainingResources);
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
-  
+  const [stock, setStock] = useState<DealerStock[]>([]);
+  const [orders, setOrders] = useState<DealerOrder[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
+  const [creditInfo, setCreditInfo] = useState<CreditInfo>({
+    totalLimit: 500000,
+    outstanding: 221250,
+    available: 278750,
+  });
+  const [promotionalAssets] = useState<PromotionalAsset[]>([]);
+  const [trainingResources] = useState<TrainingResource[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
   // Dialog States
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
@@ -439,7 +184,7 @@ const Dealer = () => {
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const [warrantyDialogOpen, setWarrantyDialogOpen] = useState(false);
-  
+
   // Form States
   const [orderCart, setOrderCart] = useState<{ id: string; qty: number }[]>([]);
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", email: "", address: "", city: "" });
@@ -448,7 +193,54 @@ const Dealer = () => {
   const [selectedTracking, setSelectedTracking] = useState<DealerOrder | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<DealerOrder | null>(null);
   const [warrantySearch, setWarrantySearch] = useState("");
-  
+
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  const loadAllData = async () => {
+    try {
+      setLoading(true);
+
+      // Load products/stock from API
+      const productsResponse = await productService.getProducts({ limit: 100 });
+      setStock(productsResponse.data.map((p, i) => ({
+        id: p._id,
+        name: p.name.en,
+        price: p.dealerPrice,
+        localStock: Math.floor(Math.random() * 20),
+        parentStock: p.inventory?.currentStock || 0,
+        minStock: p.minStockLevel || 10,
+        category: p.category,
+        image: p.images[0] || "/placeholder-product.jpg"
+      })));
+
+      // Load orders from API
+      const ordersResponse = await orderService.getOrders({ limit: 100 });
+      setOrders(ordersResponse.data.map(o => ({
+        id: o._id,
+        products: o.items.map(item => ({
+          id: item.productId._id,
+          name: item.productId.name?.en || 'Product',
+          qty: item.quantity,
+          price: item.price
+        })),
+        total: o.subtotal,
+        gst: o.gstAmount,
+        grandTotal: o.totalAmount,
+        status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered",
+        date: new Date(o.createdAt).toISOString().split('T')[0],
+        trackingId: o.orderNumber
+      })));
+
+    } catch (error: any) {
+      console.error('Failed to load dealer data:', error);
+      toast.error('Failed to load some data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Calculations
   const totalLocalStock = stock.reduce((sum, item) => sum + item.localStock, 0);
   const lowStockItems = stock.filter(item => item.localStock < item.minStock);
@@ -457,12 +249,12 @@ const Dealer = () => {
   const unreadNotifications = notifications.filter(n => !n.read).length;
   const currentMonthSales = salesTrendData[salesTrendData.length - 1].sales;
   const currentMonthCommission = commissionData[commissionData.length - 1].commission;
-  
+
   // Handlers
   const addToCart = (productId: string) => {
     const existing = orderCart.find(item => item.id === productId);
     if (existing) {
-      setOrderCart(orderCart.map(item => 
+      setOrderCart(orderCart.map(item =>
         item.id === productId ? { ...item, qty: item.qty + 1 } : item
       ));
     } else {
@@ -470,33 +262,33 @@ const Dealer = () => {
     }
     toast.success("Added to cart");
   };
-  
+
   const removeFromCart = (productId: string) => {
     setOrderCart(orderCart.filter(item => item.id !== productId));
     toast.success("Removed from cart");
   };
-  
+
   const updateCartQty = (productId: string, qty: number) => {
-    setOrderCart(orderCart.map(item => 
+    setOrderCart(orderCart.map(item =>
       item.id === productId ? { ...item, qty: Math.max(1, qty) } : item
     ));
   };
-  
+
   const placeOrder = () => {
     if (orderCart.length === 0) {
       toast.error("Cart is empty");
       return;
     }
-    
+
     const orderProducts = orderCart.map(item => {
       const product = stock.find(p => p.id === item.id)!;
       return { id: product.id, name: product.name, qty: item.qty, price: product.price };
     });
-    
+
     const total = orderProducts.reduce((sum, p) => sum + (p.qty * p.price), 0);
     const gst = Math.round(total * 0.18);
     const grandTotal = total + gst;
-    
+
     const newOrder: DealerOrder = {
       id: `ORD-${Math.floor(2000 + Math.random() * 9000)}`,
       products: orderProducts,
@@ -506,49 +298,49 @@ const Dealer = () => {
       status: "Pending",
       date: new Date().toISOString().slice(0, 10),
     };
-    
+
     setOrders([newOrder, ...orders]);
     setOrderCart([]);
     setOrderDialogOpen(false);
     toast.success(`Order ${newOrder.id} placed successfully! Total: ${formatINR(grandTotal)}`);
   };
-  
+
   const addCustomer = () => {
     if (!newCustomer.name || !newCustomer.phone || !newCustomer.city) {
       toast.error("Name, phone, and city are required");
       return;
     }
-    
+
     if (!/^\d{10}$/.test(newCustomer.phone)) {
       toast.error("Phone must be 10 digits");
       return;
     }
-    
+
     const customer: Customer = {
       id: `CUST${String(customers.length + 1).padStart(3, '0')}`,
       ...newCustomer,
       totalPurchases: 0,
       warranties: [],
     };
-    
+
     setCustomers([customer, ...customers]);
     setNewCustomer({ name: "", phone: "", email: "", address: "", city: "" });
     setCustomerDialogOpen(false);
     toast.success(`Customer ${customer.name} added successfully!`);
   };
-  
+
   const addServiceRequest = () => {
     if (!newServiceRequest.customerId || !newServiceRequest.description) {
       toast.error("Customer and description are required");
       return;
     }
-    
+
     const customer = customers.find(c => c.id === newServiceRequest.customerId);
     if (!customer) {
       toast.error("Customer not found");
       return;
     }
-    
+
     const request: ServiceRequest = {
       id: `SR-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName: customer.name,
@@ -556,21 +348,21 @@ const Dealer = () => {
       status: "Open",
       date: new Date().toISOString().slice(0, 10),
     };
-    
+
     setServiceRequests([request, ...serviceRequests]);
     setNewServiceRequest({ customerId: "", type: "Complaint", description: "", priority: "Medium" });
     setServiceDialogOpen(false);
     toast.success(`Service request ${request.id} created successfully!`);
   };
-  
+
   const makePayment = () => {
     if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) {
       toast.error("Enter valid amount");
       return;
     }
-    
+
     const amount = parseFloat(paymentForm.amount);
-    
+
     const transaction: PaymentTransaction = {
       id: `TXN-${Math.floor(5000 + Math.random() * 5000)}`,
       type: "Payment",
@@ -581,23 +373,23 @@ const Dealer = () => {
       orderId: paymentForm.orderId || undefined,
       reference: `${paymentForm.method}${Math.floor(100000 + Math.random() * 900000)}`,
     };
-    
+
     setTransactions([transaction, ...transactions]);
     setCreditInfo(prev => ({
       ...prev,
       outstanding: Math.max(0, prev.outstanding - amount),
       available: Math.min(prev.totalLimit, prev.available + amount),
     }));
-    
+
     setPaymentForm({ amount: "", method: "UPI", orderId: "" });
     setPaymentDialogOpen(false);
     toast.success(`Payment of ${formatINR(amount)} successful!`);
   };
-  
+
   const markNotificationRead = (id: string) => {
     setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
   };
-  
+
   const markAllNotificationsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
     toast.success("All notifications marked as read");
@@ -707,10 +499,10 @@ const Dealer = () => {
                   ].map((item) => {
                     const Icon = item.icon;
                     const active = activeTab === item.id;
-                    const badge = item.id === "notifications" ? unreadNotifications : 
-                                  item.id === "orders" ? pendingOrders.length :
-                                  item.id === "crm" ? activeServiceRequests.length : 0;
-                    
+                    const badge = item.id === "notifications" ? unreadNotifications :
+                      item.id === "orders" ? pendingOrders.length :
+                        item.id === "crm" ? activeServiceRequests.length : 0;
+
                     return (
                       <button
                         key={item.id}
@@ -866,7 +658,7 @@ const Dealer = () => {
                     <p className="font-semibold">{selectedTracking.eta || "Calculating..."}</p>
                   </div>
                 </div>
-                
+
                 {selectedTracking.shippingStatus && (
                   <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
                     <CardContent className="p-4">
@@ -877,9 +669,9 @@ const Dealer = () => {
                     </CardContent>
                   </Card>
                 )}
-                
+
                 <Separator />
-                
+
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">Order Details</Label>
                   <div className="space-y-2">
@@ -934,12 +726,12 @@ const Dealer = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Due Date:</span>
-                    <span className="font-semibold">{new Date(new Date(selectedInvoice.date).getTime() + 30*24*60*60*1000).toISOString().slice(0, 10)}</span>
+                    <span className="font-semibold">{new Date(new Date(selectedInvoice.date).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}</span>
                   </div>
                 </div>
-                
+
                 <Separator />
-                
+
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">Items</Label>
                   <Table>
@@ -963,7 +755,7 @@ const Dealer = () => {
                     </TableBody>
                   </Table>
                 </div>
-                
+
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal:</span>
@@ -1019,7 +811,7 @@ const DashboardTab = ({
           <p className="text-xs text-muted-foreground mt-1">Target: ₹6.00L</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardContent className="p-4 md:p-5">
           <div className="flex items-start justify-between mb-2">
@@ -1035,7 +827,7 @@ const DashboardTab = ({
           <p className="text-xs text-muted-foreground mt-1">This month</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardContent className="p-4 md:p-5">
           <div className="flex items-start justify-between mb-2">
@@ -1051,7 +843,7 @@ const DashboardTab = ({
           <p className="text-xs text-muted-foreground mt-1">{orders.filter((o: any) => o.status === "Delivered").length} delivered</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardContent className="p-4 md:p-5">
           <div className="flex items-start justify-between mb-2">
@@ -1083,8 +875,8 @@ const DashboardTab = ({
             <AreaChart data={salesTrendData}>
               <defs>
                 <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -1101,7 +893,7 @@ const DashboardTab = ({
           </ResponsiveContainer>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1151,20 +943,20 @@ const DashboardTab = ({
               <span className="font-semibold text-green-600">{formatINR(creditInfo.available)}</span>
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Credit Utilization</span>
               <span>{Math.round((creditInfo.outstanding / creditInfo.totalLimit) * 100)}%</span>
             </div>
-            <Progress 
+            <Progress
               value={(creditInfo.outstanding / creditInfo.totalLimit) * 100}
               className="h-2"
             />
           </div>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base md:text-lg">
@@ -1184,7 +976,7 @@ const DashboardTab = ({
               </div>
             </div>
           )}
-          
+
           {serviceRequests.filter((s: any) => s.status === "Open").length > 0 && (
             <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
               <Wrench className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -1196,7 +988,7 @@ const DashboardTab = ({
               </div>
             </div>
           )}
-          
+
           {creditInfo.outstanding > creditInfo.totalLimit * 0.8 && (
             <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800">
               <CreditCard className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -1208,7 +1000,7 @@ const DashboardTab = ({
               </div>
             </div>
           )}
-          
+
           {lowStockItems.length === 0 && serviceRequests.filter((s: any) => s.status === "Open").length === 0 && creditInfo.outstanding < creditInfo.totalLimit * 0.8 && (
             <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
               <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -1251,7 +1043,7 @@ const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
           <p className="text-xs text-muted-foreground mt-1">units on hand</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardContent className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Parent Stock</div>
@@ -1259,7 +1051,7 @@ const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
           <p className="text-xs text-muted-foreground mt-1">available to order</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardContent className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Low Stock Items</div>
@@ -1267,7 +1059,7 @@ const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
           <p className="text-xs text-muted-foreground mt-1">need reordering</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card">
         <CardContent className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Total Products</div>
@@ -1291,17 +1083,17 @@ const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
           {stock.map((product: any) => {
             const isLowStock = product.localStock < product.minStock;
             const stockPercentage = (product.localStock / product.minStock) * 100;
-            
+
             return (
               <Card key={product.id} className={cn("shadow-sm", isLowStock && "border-orange-300 dark:border-orange-800")}>
                 <CardContent className="p-4">
                   <div className="aspect-video bg-secondary/30 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                   </div>
-                  
+
                   <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
                   <p className="text-lg font-bold text-primary mb-2">{formatINR(product.price)}</p>
-                  
+
                   <div className="space-y-2 mb-3">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Your Stock:</span>
@@ -1318,7 +1110,7 @@ const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
                       <span className="font-semibold">{product.minStock} units</span>
                     </div>
                   </div>
-                  
+
                   {isLowStock && (
                     <div className="mb-3">
                       <div className="flex justify-between text-xs text-muted-foreground mb-1">
@@ -1328,10 +1120,10 @@ const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
                       <Progress value={Math.min(100, stockPercentage)} className="h-1.5" />
                     </div>
                   )}
-                  
+
                   <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       className="flex-1"
                       onClick={() => addToCart(product.id)}
                       disabled={product.parentStock === 0}
@@ -1343,7 +1135,7 @@ const InventoryTab = ({ stock, lowStockItems, addToCart }: any) => (
                       <Eye className="h-3 w-3" />
                     </Button>
                   </div>
-                  
+
                   {isLowStock && (
                     <div className="mt-2 flex items-center gap-1 text-xs text-orange-600">
                       <AlertCircle className="h-3 w-3" />
@@ -1396,7 +1188,7 @@ const OrdersTab = ({
                 {orderCart.map((item: any) => {
                   const product = stock.find((p: any) => p.id === item.id);
                   if (!product) return null;
-                  
+
                   return (
                     <Card key={item.id}>
                       <CardContent className="p-4">
@@ -1432,9 +1224,9 @@ const OrdersTab = ({
                     </Card>
                   );
                 })}
-                
+
                 <Separator />
-                
+
                 <div className="space-y-2 bg-secondary/30 p-4 rounded-lg">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal:</span>
@@ -1470,7 +1262,7 @@ const OrdersTab = ({
           </ScrollArea>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOrderDialogOpen(false)}>Cancel</Button>
-            <Button 
+            <Button
               onClick={placeOrder}
               disabled={orderCart.length === 0}
               className="bg-gradient-cta"
@@ -1506,11 +1298,11 @@ const OrdersTab = ({
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-mono font-semibold">{order.id}</h4>
-                        <Badge 
+                        <Badge
                           variant={
                             order.status === "Delivered" ? "secondary" :
-                            order.status === "Shipped" ? "default" :
-                            order.status === "Approved" ? "outline" : "destructive"
+                              order.status === "Shipped" ? "default" :
+                                order.status === "Approved" ? "outline" : "destructive"
                           }
                         >
                           {order.status}
@@ -1523,7 +1315,7 @@ const OrdersTab = ({
                       <p className="text-xs text-muted-foreground">Incl. GST</p>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2 mb-3">
                     {order.products.map((product: any, idx: number) => (
                       <div key={idx} className="flex justify-between text-sm">
@@ -1532,9 +1324,9 @@ const OrdersTab = ({
                       </div>
                     ))}
                   </div>
-                  
+
                   <Separator className="my-3" />
-                  
+
                   <div className="flex flex-wrap gap-2">
                     {order.trackingId && (
                       <Button
@@ -1597,11 +1389,11 @@ const CRMTab = ({
   warrantySearch, setWarrantySearch,
   addCustomer, addServiceRequest
 }: any) => {
-  const foundWarranty = warrantySearch ? 
-    customers.flatMap((c: any) => c.warranties).find((w: any) => 
+  const foundWarranty = warrantySearch ?
+    customers.flatMap((c: any) => c.warranties).find((w: any) =>
       w.serialNumber.toLowerCase().includes(warrantySearch.toLowerCase())
     ) : null;
-  
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1631,13 +1423,13 @@ const CRMTab = ({
                     placeholder="SN123456789"
                   />
                 </div>
-                
+
                 {foundWarranty && (
                   <Card className={cn(
                     "border-2",
                     foundWarranty.status === "Active" ? "border-green-500 bg-green-50 dark:bg-green-950" :
-                    foundWarranty.status === "Expired" ? "border-orange-500 bg-orange-50 dark:bg-orange-950" :
-                    "border-red-500 bg-red-50 dark:bg-red-950"
+                      foundWarranty.status === "Expired" ? "border-orange-500 bg-orange-50 dark:bg-orange-950" :
+                        "border-red-500 bg-red-50 dark:bg-red-950"
                   )}>
                     <CardContent className="p-4 space-y-2">
                       <div className="flex justify-between">
@@ -1661,7 +1453,7 @@ const CRMTab = ({
                     </CardContent>
                   </Card>
                 )}
-                
+
                 {warrantySearch && !foundWarranty && (
                   <div className="text-center py-4 text-muted-foreground">
                     <p>No warranty found for this serial number</p>
@@ -1673,7 +1465,7 @@ const CRMTab = ({
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          
+
           <Dialog open={customerDialogOpen} onOpenChange={setCustomerDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-gradient-cta">
@@ -1815,8 +1607,8 @@ const CRMTab = ({
                 <div className="grid gap-4">
                   <div>
                     <Label>Customer *</Label>
-                    <Select 
-                      value={newServiceRequest.customerId} 
+                    <Select
+                      value={newServiceRequest.customerId}
                       onValueChange={(v) => setNewServiceRequest({ ...newServiceRequest, customerId: v })}
                     >
                       <SelectTrigger>
@@ -1833,8 +1625,8 @@ const CRMTab = ({
                   </div>
                   <div>
                     <Label>Type *</Label>
-                    <Select 
-                      value={newServiceRequest.type} 
+                    <Select
+                      value={newServiceRequest.type}
                       onValueChange={(v: any) => setNewServiceRequest({ ...newServiceRequest, type: v })}
                     >
                       <SelectTrigger>
@@ -1850,8 +1642,8 @@ const CRMTab = ({
                   </div>
                   <div>
                     <Label>Priority *</Label>
-                    <Select 
-                      value={newServiceRequest.priority} 
+                    <Select
+                      value={newServiceRequest.priority}
                       onValueChange={(v: any) => setNewServiceRequest({ ...newServiceRequest, priority: v })}
                     >
                       <SelectTrigger>
@@ -1892,10 +1684,10 @@ const CRMTab = ({
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-mono font-semibold text-sm">{request.id}</span>
                         <Badge variant="outline">{request.type}</Badge>
-                        <Badge 
+                        <Badge
                           variant={
                             request.priority === "High" ? "destructive" :
-                            request.priority === "Medium" ? "default" : "secondary"
+                              request.priority === "Medium" ? "default" : "secondary"
                           }
                         >
                           {request.priority}
@@ -1905,10 +1697,10 @@ const CRMTab = ({
                       <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Select 
-                        value={request.status} 
+                      <Select
+                        value={request.status}
                         onValueChange={(v: any) => {
-                          setServiceRequests(serviceRequests.map((sr: any) => 
+                          setServiceRequests(serviceRequests.map((sr: any) =>
                             sr.id === request.id ? { ...sr, status: v } : sr
                           ));
                           toast.success(`Request ${request.id} status updated`);
@@ -1984,8 +1776,8 @@ const PaymentsTab = ({
             </div>
             <div>
               <Label>Payment Method *</Label>
-              <Select 
-                value={paymentForm.method} 
+              <Select
+                value={paymentForm.method}
                 onValueChange={(v: any) => setPaymentForm({ ...paymentForm, method: v })}
               >
                 <SelectTrigger>
@@ -1999,8 +1791,8 @@ const PaymentsTab = ({
             </div>
             <div>
               <Label>Order ID (Optional)</Label>
-              <Select 
-                value={paymentForm.orderId} 
+              <Select
+                value={paymentForm.orderId}
                 onValueChange={(v) => setPaymentForm({ ...paymentForm, orderId: v })}
               >
                 <SelectTrigger>
@@ -2015,7 +1807,7 @@ const PaymentsTab = ({
                 </SelectContent>
               </Select>
             </div>
-            
+
             <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
@@ -2055,7 +1847,7 @@ const PaymentsTab = ({
           <p className="text-xs text-muted-foreground mt-1">Total available</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card border-orange-300 dark:border-orange-800">
         <CardContent className="p-5">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Outstanding</div>
@@ -2063,7 +1855,7 @@ const PaymentsTab = ({
           <p className="text-xs text-muted-foreground mt-1">Pending payment</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-card border-green-300 dark:border-green-800">
         <CardContent className="p-5">
           <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Available</div>
@@ -2114,12 +1906,12 @@ const PaymentsTab = ({
                     <div className={cn(
                       "flex h-10 w-10 items-center justify-center rounded-full",
                       transaction.type === "Payment" && transaction.amount > 0 ? "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300" :
-                      transaction.type === "Order" ? "bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300" :
-                      "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300"
+                        transaction.type === "Order" ? "bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300" :
+                          "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300"
                     )}>
                       {transaction.type === "Payment" ? <Receipt className="h-5 w-5" /> :
-                       transaction.type === "Order" ? <ShoppingCart className="h-5 w-5" /> :
-                       <IndianRupee className="h-5 w-5" />}
+                        transaction.type === "Order" ? <ShoppingCart className="h-5 w-5" /> :
+                          <IndianRupee className="h-5 w-5" />}
                     </div>
                     <div>
                       <p className="font-semibold text-sm">{transaction.type}</p>
@@ -2138,10 +1930,10 @@ const PaymentsTab = ({
                     )}>
                       {transaction.amount > 0 ? "+" : ""}{formatINR(Math.abs(transaction.amount))}
                     </p>
-                    <Badge 
+                    <Badge
                       variant={
                         transaction.status === "Success" ? "secondary" :
-                        transaction.status === "Pending" ? "default" : "destructive"
+                          transaction.status === "Pending" ? "default" : "destructive"
                       }
                       className="text-xs"
                     >
@@ -2258,7 +2050,7 @@ const MarketingTab = ({ promotionalAssets, trainingResources }: any) => (
               <p className="text-xs text-muted-foreground">1800-123-4567</p>
             </div>
           </Button>
-          
+
           <Button className="h-auto py-6 flex-col gap-2" variant="outline">
             <MessageCircle className="h-8 w-8 text-primary" />
             <div className="text-center">
@@ -2266,7 +2058,7 @@ const MarketingTab = ({ promotionalAssets, trainingResources }: any) => (
               <p className="text-xs text-muted-foreground">Chat with expert</p>
             </div>
           </Button>
-          
+
           <Button className="h-auto py-6 flex-col gap-2" variant="outline">
             <Mail className="h-8 w-8 text-primary" />
             <div className="text-center">
@@ -2274,7 +2066,7 @@ const MarketingTab = ({ promotionalAssets, trainingResources }: any) => (
               <p className="text-xs text-muted-foreground">support@msi.com</p>
             </div>
           </Button>
-          
+
           <Button className="h-auto py-6 flex-col gap-2" variant="outline">
             <HelpCircle className="h-8 w-8 text-primary" />
             <div className="text-center">
@@ -2306,8 +2098,8 @@ const NotificationsTab = ({ notifications, markNotificationRead, markAllNotifica
 
     <div className="space-y-3">
       {notifications.map((notification: any) => (
-        <Card 
-          key={notification.id} 
+        <Card
+          key={notification.id}
           className={cn(
             "shadow-sm cursor-pointer transition-all",
             !notification.read && "border-l-4 border-l-primary bg-secondary/30"
@@ -2319,16 +2111,16 @@ const NotificationsTab = ({ notifications, markNotificationRead, markAllNotifica
               <div className={cn(
                 "flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0",
                 notification.type === "Promo" ? "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300" :
-                notification.type === "Alert" ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300" :
-                notification.type === "Update" ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300" :
-                "bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300"
+                  notification.type === "Alert" ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300" :
+                    notification.type === "Update" ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300" :
+                      "bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300"
               )}>
                 {notification.type === "Promo" ? <Star className="h-5 w-5" /> :
-                 notification.type === "Alert" ? <AlertCircle className="h-5 w-5" /> :
-                 notification.type === "Update" ? <Bell className="h-5 w-5" /> :
-                 <Zap className="h-5 w-5" />}
+                  notification.type === "Alert" ? <AlertCircle className="h-5 w-5" /> :
+                    notification.type === "Update" ? <Bell className="h-5 w-5" /> :
+                      <Zap className="h-5 w-5" />}
               </div>
-              
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <h4 className="font-semibold text-sm">{notification.title}</h4>

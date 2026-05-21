@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { authService } from "@/services/auth.service";
+import { toast } from "sonner";
 
 export type Role = "customer" | "dealer" | "admin" | "employee";
 export type EmployeeRole = "production" | "sales" | "service";
@@ -111,28 +113,50 @@ type Ctx = {
 
 const AuthContext = createContext<Ctx | null>(null);
 const STORAGE_KEY = "msi.user";
-const DUMMY_OTP = "123456";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   });
+  const [lastUserType, setLastUserType] = useState<"customer" | "dealer">("customer");
 
   useEffect(() => {
     if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     else localStorage.removeItem(STORAGE_KEY);
   }, [user]);
 
-  const sendOtp = async (_mobile: string) => {
-    await new Promise((r) => setTimeout(r, 400));
+  const sendOtp = async (mobile: string) => {
+    try {
+      const userType = "customer"; // For now, always customer. Can be extended later.
+      setLastUserType(userType);
+      await authService.sendOTP({ mobile, userType });
+      toast.success("OTP sent successfully");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to send OTP");
+      throw error;
+    }
   };
 
   const verifyOtp = async (mobile: string, otp: string) => {
-    await new Promise((r) => setTimeout(r, 300));
-    if (otp !== DUMMY_OTP) return false;
-    setUser({ role: "customer", mobile, name: `Customer ${mobile.slice(-4)}` });
-    return true;
+    try {
+      const response = await authService.verifyOTP({ mobile, otp, userType: lastUserType });
+      if (response.success) {
+        const userData = response.data.user;
+        setUser({
+          role: userData.userType as Role,
+          mobile: userData.mobile,
+          name: userData.name,
+          code: userData.userCode,
+        });
+        toast.success("Login successful");
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Invalid OTP");
+      return false;
+    }
   };
 
   const staffLogin = async (
@@ -169,7 +193,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { ok: true, employeeRole: match.employeeRole };
   };
 
-  const logout = () => setUser(null);
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      // Ignore error, just clear local state
+    }
+    setUser(null);
+    toast.info("Logged out successfully");
+  };
 
   return (
     <AuthContext.Provider value={{ user, isAuthed: !!user, sendOtp, verifyOtp, staffLogin, employeeLogin, logout }}>

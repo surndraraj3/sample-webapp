@@ -33,7 +33,6 @@ export const AuthModal = ({ open, onOpenChange, onSuccess }: Props) => {
     await sendOtp(mobile);
     setLoading(false);
     setStep("otp");
-    toast.success("OTP sent! Use 123456 for demo.");
   };
 
   const handleVerify = async () => {
@@ -47,7 +46,7 @@ export const AuthModal = ({ open, onOpenChange, onSuccess }: Props) => {
       reset();
       onSuccess?.();
     } else {
-      toast.error("Invalid OTP. Use 123456.");
+      toast.error("Invalid OTP. Please try again.");
     }
   };
 

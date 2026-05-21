@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ticketService } from "@/services/ticket.service";
 
 type Ticket = {
     id: string;
@@ -41,97 +42,47 @@ type Ticket = {
     comments: { by: string; text: string; date: string; time?: string }[];
 };
 
-const initialTickets: Ticket[] = [
-    {
-        id: "TCK001",
-        type: "Complaint",
-        subject: "Motor not starting",
-        description: "Customer reports motor controller not powering on after installation",
-        status: "In Progress",
-        priority: "High",
-        customerId: "CUST001",
-        customerName: "Ramesh Kumar",
-        productId: "P001",
-        productName: "Smart Water Motor Robo",
-        serialNo: "SN123456",
-        assignedTo: "Anil Reddy",
-        date: "2026-05-03",
-        comments: [
-            { by: "Anil Reddy", text: "Checking power supply and connections", date: "2026-05-03", time: "10:30 AM" },
-            { by: "Anil Reddy", text: "Found loose connection in power board. Fixing now.", date: "2026-05-03", time: "02:15 PM" }
-        ]
-    },
-    {
-        id: "TCK002",
-        type: "Warranty",
-        subject: "Warranty claim for defective unit",
-        description: "Unit stopped working within warranty period. Customer requesting replacement.",
-        status: "Open",
-        priority: "Medium",
-        dealerId: "DLR001",
-        dealerName: "Suresh Agro Distributors",
-        productId: "P002",
-        productName: "Anti-Scaling Unit",
-        serialNo: "SN789012",
-        date: "2026-05-06",
-        comments: []
-    },
-    {
-        id: "TCK003",
-        type: "Return",
-        subject: "Return request - damaged in transit",
-        description: "Product packaging damaged during shipping. Customer wants return.",
-        status: "Open",
-        priority: "Critical",
-        dealerId: "DLR002",
-        dealerName: "Krishna Pumps",
-        productName: "Water Level Controller",
-        date: "2026-05-08",
-        comments: []
-    },
-    {
-        id: "TCK004",
-        type: "Query",
-        subject: "Installation guidance needed",
-        description: "Customer needs technical assistance for installation",
-        status: "Resolved",
-        priority: "Low",
-        customerName: "Suresh Patel",
-        productName: "Smart Pump System",
-        date: "2026-04-28",
-        resolvedDate: "2026-04-29",
-        assignedTo: "Anil Reddy",
-        comments: [
-            { by: "Anil Reddy", text: "Provided installation manual and video tutorial link", date: "2026-04-28", time: "11:00 AM" },
-            { by: "Customer", text: "Thank you! Installation completed successfully", date: "2026-04-29", time: "03:45 PM" }
-        ]
-    },
-    {
-        id: "TCK005",
-        type: "Complaint",
-        subject: "Sensor malfunction",
-        description: "Water level sensor giving incorrect readings",
-        status: "In Progress",
-        priority: "High",
-        customerName: "Vijay Reddy",
-        productName: "Water Level Controller",
-        serialNo: "SN445566",
-        assignedTo: "Anil Reddy",
-        date: "2026-05-09",
-        comments: [
-            { by: "Anil Reddy", text: "Sensor calibration issue identified. Recalibrating now.", date: "2026-05-09", time: "09:15 AM" }
-        ]
-    },
-];
-
 const EmployeeService = () => {
     const { user } = useAuth();
     const { hasPermission } = usePermissions();
-    const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
+    const [tickets, setTickets] = useState<Ticket[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeFilter, setActiveFilter] = useState<"all" | Ticket["status"]>("all");
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [viewDialog, setViewDialog] = useState(false);
     const [commentText, setCommentText] = useState("");
+
+    useEffect(() => {
+        loadTickets();
+    }, []);
+
+    const loadTickets = async () => {
+        try {
+            setLoading(true);
+            const response = await ticketService.getTickets({ limit: 100 });
+            setTickets(response.data.map(t => ({
+                id: t._id,
+                type: t.category as "Complaint" | "Warranty" | "Query" | "Return",
+                subject: t.subject,
+                description: t.description,
+                status: t.status as "Open" | "In Progress" | "Resolved" | "Closed",
+                priority: t.priority as "Low" | "Medium" | "High" | "Critical",
+                customerName: 'Customer',
+                productName: 'Product',
+                date: new Date(t.createdAt).toISOString().split('T')[0],
+                comments: t.comments?.map(c => ({
+                    by: c.commentedBy,
+                    text: c.comment,
+                    date: new Date(c.commentedAt).toISOString().split('T')[0]
+                })) || []
+            })));
+        } catch (error: any) {
+            console.error('Failed to load tickets:', error);
+            toast.error('Failed to load ticket data');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filteredTickets = activeFilter === "all"
         ? tickets
@@ -141,6 +92,19 @@ const EmployeeService = () => {
     const inProgressTickets = tickets.filter(t => t.status === "In Progress");
     const resolvedTickets = tickets.filter(t => t.status === "Resolved");
     const criticalTickets = tickets.filter(t => t.priority === "Critical" && t.status !== "Resolved" && t.status !== "Closed");
+
+    if (loading) {
+        return (
+            <SiteLayout>
+                <div className="container py-12 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading support tickets...</p>
+                    </div>
+                </div>
+            </SiteLayout>
+        );
+    }
 
     const handleUpdateStatus = (ticketId: string, newStatus: Ticket["status"]) => {
         if (!hasPermission(PERMISSIONS.MANAGE_TICKETS)) {

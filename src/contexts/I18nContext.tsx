@@ -49,7 +49,7 @@ const dict: Dict = {
   "auth.sub": { en: "We'll send a one-time code to your mobile.", te: "మేము మీ మొబైల్‌కు ఒక-సారి కోడ్ పంపుతాము." },
   "auth.mobile": { en: "Mobile Number", te: "మొబైల్ నంబర్" },
   "auth.send": { en: "Send OTP", te: "OTP పంపండి" },
-  "auth.otp": { en: "Enter OTP (use 123456)", te: "OTP నమోదు చేయండి (123456 ఉపయోగించండి)" },
+  "auth.otp": { en: "Enter OTP", te: "OTP నమోదు చేయండి" },
   "auth.verify": { en: "Verify & Continue", te: "ధృవీకరించి కొనసాగించండి" },
   "auth.back": { en: "Back", te: "వెనక్కు" },
 

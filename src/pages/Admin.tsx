@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -25,6 +25,11 @@ import {
 import { formatINR, products as seedProducts } from "@/data/products";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { productService } from "@/services/product.service";
+import { dealerService } from "@/services/dealer.service";
+import { orderService } from "@/services/order.service";
+import { inventoryService } from "@/services/inventory.service";
+import { ticketService } from "@/services/ticket.service";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { EmployeeRole, ROLE_PERMISSIONS, EMPLOYEE_CREDENTIALS } from "@/contexts/AuthContext";
 
@@ -82,75 +87,6 @@ type RawMaterial = {
   id: string; name: string; unit: string; quantity: number; minStock: number; supplier: string; lastOrder?: string;
 };
 
-// Initial Data
-const initialMenu: MenuItem[] = seedProducts.map((p) => ({
-  id: p.id, name: p.name.en, price: p.price, description: p.tagline.en, stock: Math.floor(Math.random() * 100) + 20, category: "Electronics"
-}));
-
-const initialDealers: Dealer[] = [
-  { id: "1", code: "DLR001", name: "Suresh Agro Distributors", city: "Warangal", phone: "9876543210", email: "suresh@agro.com", status: "Approved", creditLimit: 500000, outstanding: 125000, kycStatus: "Verified", joinDate: "2025-01-15", totalOrders: 45, totalRevenue: 2340000 },
-  { id: "2", code: "DLR002", name: "Krishna Pumps", city: "Vijayawada", phone: "9876500011", email: "krishna@pumps.com", status: "Approved", creditLimit: 300000, outstanding: 85000, kycStatus: "Verified", joinDate: "2025-02-10", totalOrders: 32, totalRevenue: 1650000 },
-  { id: "3", code: "DLR003", name: "Sai Irrigation", city: "Tirupati", phone: "9876500022", email: "sai@irrigation.com", status: "Pending", creditLimit: 200000, outstanding: 0, kycStatus: "Pending", joinDate: "2026-04-01", totalOrders: 0, totalRevenue: 0 },
-  { id: "4", code: "DLR004", name: "Reddy Trade Links", city: "Nellore", phone: "9876500033", email: "reddy@trade.com", status: "Pending", creditLimit: 250000, outstanding: 0, kycStatus: "Pending", joinDate: "2026-04-15", totalOrders: 0, totalRevenue: 0 },
-  { id: "5", code: "DLR005", name: "Venkat Enterprises", city: "Guntur", phone: "9876500044", email: "venkat@ent.com", status: "Approved", creditLimit: 400000, outstanding: 156000, kycStatus: "Verified", joinDate: "2025-03-20", totalOrders: 38, totalRevenue: 1980000 },
-];
-
-const initialStock: StockEntry[] = [
-  { id: "s1", product: "Smart Water Motor Robo", qty: 50, type: "in", date: "2026-04-20", note: "Initial stock", reference: "PO-001" },
-  { id: "s2", product: "Anti-Scaling Unit", qty: 30, type: "in", date: "2026-04-21", reference: "PO-002" },
-  { id: "s3", product: "Smart Water Motor Robo", qty: 10, type: "out", date: "2026-04-25", note: "Delivered to DLR001", reference: "SO-001" },
-];
-
-const initialOrders: Order[] = [
-  { id: "ORD001", dealerId: "1", dealerName: "Suresh Agro Distributors", items: [{ product: "Smart Water Motor Robo", qty: 10, price: 12500 }], total: 125000, status: "Delivered", date: "2026-04-15", trackingId: "TRK123456" },
-  { id: "ORD002", dealerId: "2", dealerName: "Krishna Pumps", items: [{ product: "Anti-Scaling Unit", qty: 5, price: 8500 }], total: 42500, status: "Shipped", date: "2026-04-28", trackingId: "TRK123457", shippingStatus: "In Transit" },
-  { id: "ORD003", dealerId: "5", dealerName: "Venkat Enterprises", items: [{ product: "Smart Water Motor Robo", qty: 15, price: 12500 }], total: 187500, status: "Approved", date: "2026-05-02" },
-  { id: "ORD004", dealerId: "1", dealerName: "Suresh Agro Distributors", items: [{ product: "Anti-Scaling Unit", qty: 8, price: 8500 }], total: 68000, status: "Pending", date: "2026-05-05" },
-];
-
-const initialInvoices: Invoice[] = [
-  { id: "INV001", orderId: "ORD001", dealerId: "1", dealerName: "Suresh Agro Distributors", amount: 125000, gst: 22500, total: 147500, date: "2026-04-15", status: "Paid", dueDate: "2026-05-15", paymentDate: "2026-04-20" },
-  { id: "INV002", orderId: "ORD002", dealerId: "2", dealerName: "Krishna Pumps", amount: 42500, gst: 7650, total: 50150, date: "2026-04-28", status: "Sent", dueDate: "2026-05-28" },
-];
-
-const initialTickets: Ticket[] = [
-  { id: "TCK001", type: "Complaint", subject: "Motor not starting", description: "Customer reports motor controller not powering on", status: "In Progress", priority: "High", customerId: "CUST001", productId: "P001", serialNo: "SN123456", assignedTo: "Tech-1", date: "2026-05-03", comments: [{ by: "Tech-1", text: "Checking power supply", date: "2026-05-03" }] },
-  { id: "TCK002", type: "Warranty", subject: "Warranty claim for defective unit", description: "Unit stopped working within warranty period", status: "Open", priority: "Medium", dealerId: "1", productId: "P002", serialNo: "SN789012", date: "2026-05-06" },
-  { id: "TCK003", type: "Return", subject: "Return request - damaged in transit", description: "Product damaged during shipping", status: "Open", priority: "Critical", dealerId: "2", date: "2026-05-08" },
-];
-
-const initialTeamMembers: TeamMember[] = [
-  { id: "TM001", name: "Rajesh Kumar", username: "rajesh", role: "Production Manager", permissions: ["view_inventory", "manage_stock", "view_orders"], email: "rajesh@msi.com", phone: "9876501111", status: "Active" },
-  { id: "TM002", name: "Priya Sharma", username: "priya", role: "Accountant", permissions: ["view_finance", "generate_invoices", "view_reports"], email: "priya@msi.com", phone: "9876502222", status: "Active" },
-  { id: "TM003", name: "Anil Reddy", username: "anil", role: "Sales Manager", permissions: ["view_dealers", "manage_orders", "view_reports"], email: "anil@msi.com", phone: "9876503333", status: "Active" },
-];
-
-const initialEmployees: Employee[] = EMPLOYEE_CREDENTIALS.map((emp, idx) => ({
-  id: `EMP${String(idx + 1).padStart(3, '0')}`,
-  employeeId: emp.employeeId,
-  name: emp.name,
-  email: emp.email,
-  phone: emp.phone,
-  role: emp.employeeRole === "production" ? "Production Team" : emp.employeeRole === "sales" ? "Sales & Marketing Team" : "Service Technicians",
-  employeeRole: emp.employeeRole,
-  permissions: ROLE_PERMISSIONS[emp.employeeRole],
-  status: "Active",
-  password: emp.password,
-  createdDate: "2026-05-01",
-}));
-
-const initialNotifications: Notification[] = [
-  { id: "NOT001", title: "Summer Sale", message: "Get 20% off on all products!", type: "promo", recipients: "dealers", date: "2026-04-20", status: "Sent" },
-  { id: "NOT002", title: "New Product Launch", message: "Introducing our latest Smart Controller v2.0", type: "update", recipients: "all", date: "2026-04-25", status: "Draft" },
-];
-
-const initialRawMaterials: RawMaterial[] = [
-  { id: "RM001", name: "PCB Boards", unit: "pcs", quantity: 500, minStock: 100, supplier: "TechSupply Co", lastOrder: "2026-04-01" },
-  { id: "RM002", name: "Microcontrollers", unit: "pcs", quantity: 300, minStock: 50, supplier: "ElectroMart", lastOrder: "2026-03-28" },
-  { id: "RM003", name: "Plastic Casing", unit: "pcs", quantity: 150, minStock: 200, supplier: "PlasticWorks Ltd", lastOrder: "2026-03-15" },
-  { id: "RM004", name: "Wiring Harness", unit: "meters", quantity: 800, minStock: 300, supplier: "WireSupply Inc", lastOrder: "2026-04-10" },
-];
-
 // Chart Data for Dashboard
 const salesTrendData = [
   { month: "Nov", sales: 850000, orders: 42 },
@@ -200,17 +136,137 @@ const navItems: { id: Section; label: string; icon: any }[] = [
 
 const Admin = () => {
   const [section, setSection] = useState<Section>("dashboard");
-  const [menu, setMenu] = useState<MenuItem[]>(initialMenu);
-  const [stock, setStock] = useState<StockEntry[]>(initialStock);
-  const [dealers, setDealers] = useState<Dealer[]>(initialDealers);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [stock, setStock] = useState<StockEntry[]>([]);
+  const [dealers, setDealers] = useState<Dealer[]>([]);
   const [media, setMedia] = useState<MediaAsset[]>([]);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
-  const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
-  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>(initialRawMaterials);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load data from APIs
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  const loadAllData = async () => {
+    try {
+      setLoading(true);
+
+      // Load products/menu
+      const productsResponse = await productService.getProducts({ limit: 100 });
+      setMenu(productsResponse.data.map(p => ({
+        id: p._id,
+        name: p.name.en,
+        price: p.basePrice,
+        description: p.description.en,
+        stock: p.inventory?.currentStock || 0,
+        category: p.category
+      })));
+
+      // Load dealers
+      const dealersResponse = await dealerService.getDealers({ limit: 100 });
+      setDealers(dealersResponse.data.map(d => ({
+        id: d._id,
+        code: d.dealerCode,
+        name: d.name,
+        city: d.address?.city || '',
+        phone: d.mobile,
+        email: d.email,
+        status: d.approvalStatus as "Pending" | "Approved" | "Suspended",
+        creditLimit: d.creditLimit,
+        outstanding: d.outstandingAmount || 0,
+        kycStatus: d.kycStatus as "Pending" | "Verified" | "Rejected",
+        joinDate: new Date(d.createdAt).toISOString().split('T')[0],
+        totalOrders: 0,
+        totalRevenue: 0
+      })));
+
+      // Load orders
+      const ordersResponse = await orderService.getOrders({ limit: 100 });
+      setOrders(ordersResponse.data.map(o => ({
+        id: o._id,
+        dealerId: o.userId,
+        dealerName: 'Dealer',
+        items: o.items.map(item => ({
+          product: item.productId.name?.en || 'Product',
+          qty: item.quantity,
+          price: item.price
+        })),
+        total: o.totalAmount,
+        status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered" | "Rejected",
+        date: new Date(o.createdAt).toISOString().split('T')[0],
+        trackingId: o.orderNumber
+      })));
+
+      // Load inventory
+      const inventoryResponse = await inventoryService.getAllInventory({ limit: 100 });
+      setStock(inventoryResponse.data.map((inv, idx) => ({
+        id: `s${idx}`,
+        product: inv.productId.name?.en || 'Product',
+        qty: inv.currentStock,
+        type: "in" as "in" | "out",
+        date: new Date(inv.lastUpdated).toISOString().split('T')[0],
+        reference: inv._id
+      })));
+
+      // Load tickets
+      const ticketsResponse = await ticketService.getTickets({ limit: 100 });
+      setTickets(ticketsResponse.data.map(t => ({
+        id: t._id,
+        type: t.category as "Complaint" | "Warranty" | "Query" | "Return",
+        subject: t.subject,
+        description: t.description,
+        status: t.status as "Open" | "In Progress" | "Resolved" | "Closed",
+        priority: t.priority as "Low" | "Medium" | "High" | "Critical",
+        date: new Date(t.createdAt).toISOString().split('T')[0],
+        comments: t.comments?.map(c => ({
+          by: c.commentedBy,
+          text: c.comment,
+          date: new Date(c.commentedAt).toISOString().split('T')[0]
+        })) || []
+      })));
+
+      // Initialize employees from credentials
+      setEmployees(EMPLOYEE_CREDENTIALS.map((emp, idx) => ({
+        id: `EMP${String(idx + 1).padStart(3, '0')}`,
+        employeeId: emp.employeeId,
+        name: emp.name,
+        email: emp.email,
+        phone: emp.phone,
+        role: emp.employeeRole === "production" ? "Production Team" : emp.employeeRole === "sales" ? "Sales & Marketing Team" : "Service Technicians",
+        employeeRole: emp.employeeRole,
+        permissions: ROLE_PERMISSIONS[emp.employeeRole],
+        status: "Active",
+        password: emp.password,
+        createdDate: "2026-05-01",
+      })));
+
+    } catch (error: any) {
+      console.error('Failed to load data:', error);
+      toast.error('Failed to load some data. Using demo data.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SiteLayout>
+        <div className="container py-12 flex items-center justify-center">
+          <div className="text-center">
+            <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading dashboard...</p>
+          </div>
+        </div>
+      </SiteLayout>
+    );
+  }
 
   return (
     <SiteLayout>
