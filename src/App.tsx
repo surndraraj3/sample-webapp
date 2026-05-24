@@ -9,6 +9,7 @@ import { CartProvider } from "@/contexts/CartContext";
 import Index from "./pages/Index.tsx";
 import Products from "./pages/Products.tsx";
 import About from "./pages/About.tsx";
+import Awards from "./pages/Awards.tsx";
 import Cart from "./pages/Cart.tsx";
 import Profile from "./pages/Profile.tsx";
 import Dealer from "./pages/Dealer.tsx";
@@ -36,6 +37,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/about" element={<About />} />
+                <Route path="/awards" element={<Awards />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/staff-login" element={<StaffLogin />} />
