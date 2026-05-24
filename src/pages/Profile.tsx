@@ -21,7 +21,9 @@ const Profile = () => {
   useEffect(() => {
     const loadOrders = async () => {
       try {
+        console.log('Loading orders for profile...');
         const response = await orderService.getOrders({ limit: 50 });
+        console.log('Orders loaded:', response.data);
         setOrders(response.data);
       } catch (error) {
         console.error('Failed to load orders:', error);
@@ -97,7 +99,7 @@ const Profile = () => {
                         <div className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleString()}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold text-primary">{formatINR(o.totalAmount)}</div>
+                        <div className="text-lg font-bold text-primary">{formatINR(o.grandTotal || 0)}</div>
                         <div className="text-xs text-muted-foreground">
                           Status: <span className="capitalize">{o.status.toLowerCase()}</span>
                         </div>
@@ -106,8 +108,8 @@ const Profile = () => {
                     <div className="border-t border-border pt-3 space-y-1 text-sm">
                       {o.items.map((item, idx) => (
                         <div key={idx} className="flex justify-between">
-                          <span>{item.productId.name?.en || 'Product'} × {item.quantity}</span>
-                          <span className="text-muted-foreground">{formatINR(item.price * item.quantity)}</span>
+                          <span>{item.productName || 'Product'} × {item.quantity}</span>
+                          <span className="text-muted-foreground">{formatINR((item.unitPrice || 0) * item.quantity)}</span>
                         </div>
                       ))}
                     </div>

@@ -296,16 +296,39 @@ const Dealer = () => {
       }
 
       // Load payments from API
-      const paymentsResponse = await paymentService.getPayments({ limit: 50 });
-      setTransactions(paymentsResponse.data.map(p => ({
-        id: p.transactionId,
-        type: "Payment" as const,
-        amount: p.amount,
-        date: new Date(p.createdAt).toISOString().split('T')[0],
-        method: p.paymentMethod as "UPI" | "Net Banking" | "Credit" | "Cash",
-        status: p.paymentStatus === "PAID" ? "Success" : p.paymentStatus === "PENDING" ? "Pending" : "Failed" as "Success" | "Pending" | "Failed",
-        orderId: p.orderId?._id
-      })));
+      console.log('Loading payments for dealer...');
+      try {
+        const paymentsResponse = await paymentService.getPayments({ limit: 50 });
+        console.log('Payments API response:', paymentsResponse);
+        console.log('Payments data:', paymentsResponse.data);
+        console.log('Payments count:', paymentsResponse.data?.length || 0);
+
+        if (paymentsResponse.data && paymentsResponse.data.length > 0) {
+          const mappedPayments = paymentsResponse.data.map(p => {
+            console.log('Mapping payment:', p._id, 'amount:', p.amount, 'method:', p.paymentMethod);
+            return {
+              id: p.transactionId,
+              type: "Payment" as const,
+              amount: p.amount,
+              date: new Date(p.createdAt).toISOString().split('T')[0],
+              method: p.paymentMethod as "UPI" | "Net Banking" | "Credit" | "Cash",
+              status: p.paymentStatus === "PAID" ? "Success" : p.paymentStatus === "PENDING" ? "Pending" : "Failed" as "Success" | "Pending" | "Failed",
+              orderId: p.orderId?._id,
+              reference: p.transactionId
+            };
+          });
+          setTransactions(mappedPayments);
+          console.log('Payments loaded and set:', mappedPayments.length);
+        } else {
+          console.log('No payments returned from API');
+          setTransactions([]);
+        }
+      } catch (error: any) {
+        console.error('Failed to load payments:', error);
+        console.error('Payment error details:', error.response?.data);
+        toast.error('Failed to load payments');
+        setTransactions([]);
+      }
 
       // Load customers from API
       await loadCustomers();
