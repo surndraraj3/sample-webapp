@@ -1,19 +1,39 @@
 import { SiteLayout } from "@/components/SiteLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCart } from "@/contexts/CartContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { LogOut, Package } from "lucide-react";
 import { formatINR } from "@/data/products";
+import { useState, useEffect } from "react";
+import { orderService, Order } from "@/services/order.service";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Profile = () => {
   const { user, logout } = useAuth();
-  const { orders } = useCart();
   const { t } = useI18n();
   const [params] = useSearchParams();
   const tab = params.get("tab") === "orders" ? "orders" : "profile";
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadOrders = async () => {
+      try {
+        const response = await orderService.getOrders({ limit: 50 });
+        setOrders(response.data);
+      } catch (error) {
+        console.error('Failed to load orders:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) {
+      loadOrders();
+    }
+  }, [user]);
 
   if (!user) return <Navigate to="/" replace />;
 
@@ -52,7 +72,17 @@ const Profile = () => {
           </TabsContent>
 
           <TabsContent value="orders" className="mt-6">
-            {orders.length === 0 ? (
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-2xl border border-border/60 bg-card p-6">
+                    <Skeleton className="h-6 w-32 mb-2" />
+                    <Skeleton className="h-4 w-24 mb-4" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : orders.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center">
                 <Package className="h-10 w-10 mx-auto text-muted-foreground" />
                 <p className="mt-3 text-muted-foreground">{t("profile.no_orders")}</p>
@@ -60,22 +90,24 @@ const Profile = () => {
             ) : (
               <div className="space-y-4">
                 {orders.map((o) => (
-                  <div key={o.id} className="rounded-2xl border border-border/60 bg-card p-6 shadow-card">
+                  <div key={o._id} className="rounded-2xl border border-border/60 bg-card p-6 shadow-card">
                     <div className="flex flex-wrap justify-between gap-2 mb-3">
                       <div>
-                        <div className="font-semibold">{o.id}</div>
-                        <div className="text-xs text-muted-foreground">{new Date(o.date).toLocaleString()}</div>
+                        <div className="font-semibold">{o.orderNumber}</div>
+                        <div className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleString()}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold text-primary">{formatINR(o.total)}</div>
-                        <div className="text-xs text-muted-foreground">Payment: {o.paymentId}</div>
+                        <div className="text-lg font-bold text-primary">{formatINR(o.totalAmount)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Status: <span className="capitalize">{o.status.toLowerCase()}</span>
+                        </div>
                       </div>
                     </div>
                     <div className="border-t border-border pt-3 space-y-1 text-sm">
-                      {o.items.map((it) => (
-                        <div key={it.productId} className="flex justify-between">
-                          <span>{it.name} × {it.qty}</span>
-                          <span className="text-muted-foreground">{formatINR(it.price * it.qty)}</span>
+                      {o.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>{item.productId.name?.en || 'Product'} × {item.quantity}</span>
+                          <span className="text-muted-foreground">{formatINR(item.price * item.quantity)}</span>
                         </div>
                       ))}
                     </div>

@@ -1,12 +1,20 @@
 import api from "./api";
 
 export interface CreateTicketRequest {
+  type:
+    | "complaint"
+    | "warranty"
+    | "query"
+    | "return"
+    | "installation"
+    | "repair";
   subject: string;
   description: string;
-  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  category: string;
+  priority: "low" | "medium" | "high" | "critical";
+  customerId?: string; // Optional - for dealers creating tickets on behalf of customers
   orderId?: string;
   productId?: string;
+  attachments?: string[];
 }
 
 export interface Ticket {

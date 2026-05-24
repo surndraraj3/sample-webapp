@@ -25,6 +25,15 @@ import { formatINR, products } from "@/data/products";
 import { toast } from "sonner";
 import { productService } from "@/services/product.service";
 import { orderService } from "@/services/order.service";
+import { paymentService } from "@/services/payment.service";
+import { customerService } from "@/services/customer.service";
+import { ticketService } from "@/services/ticket.service";
+import productMotorRobo from "@/assets/product-motor-robo.jpg";
+import productAntiScaling from "@/assets/product-anti-scaling.jpg";
+import productSubmersible from "@/assets/product-submersible.jpg";
+import productSensor from "@/assets/product-sensor.jpg";
+
+const staticImages = [productMotorRobo, productAntiScaling, productSubmersible, productSensor];
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -198,6 +207,37 @@ const Dealer = () => {
     loadAllData();
   }, []);
 
+  // Load customers when CRM tab is activated or service dialog opened
+  useEffect(() => {
+    if ((activeTab === "crm" || serviceDialogOpen) && customers.length === 0) {
+      loadCustomers();
+    }
+  }, [activeTab, serviceDialogOpen]);
+
+  const loadCustomers = async () => {
+    try {
+      const customersResponse = await customerService.getCustomers({ limit: 100 });
+      console.log('Customers API response:', customersResponse);
+      if (customersResponse && customersResponse.data) {
+        setCustomers(customersResponse.data.map(c => ({
+          id: c._id,
+          name: c.name,
+          phone: c.mobile,
+          email: c.email || "",
+          address: c.address || "",
+          city: c.city || "",
+          totalPurchases: 0,
+          warranties: [],
+        })));
+        console.log('Customers loaded:', customersResponse.data.length);
+      }
+    } catch (error: any) {
+      console.error('Failed to load customers:', error);
+      console.error('Customer error details:', error.response?.data);
+      toast.error('Failed to load customers');
+    }
+  };
+
   const loadAllData = async () => {
     try {
       setLoading(true);
@@ -212,7 +252,7 @@ const Dealer = () => {
         parentStock: p.inventory?.currentStock || 0,
         minStock: p.minStockLevel || 10,
         category: p.category,
-        image: p.images[0] || "/placeholder-product.jpg"
+        image: staticImages[i % staticImages.length]
       })));
 
       // Load orders from API
@@ -220,18 +260,33 @@ const Dealer = () => {
       setOrders(ordersResponse.data.map(o => ({
         id: o._id,
         products: o.items.map(item => ({
-          id: item.productId._id,
-          name: item.productId.name?.en || 'Product',
+          id: item.productId?._id || item.productId,
+          name: item.productName || item.productId?.name?.en || 'Product',
           qty: item.quantity,
-          price: item.price
+          price: item.unitPrice
         })),
         total: o.subtotal,
-        gst: o.gstAmount,
-        grandTotal: o.totalAmount,
+        gst: o.totalTax,
+        grandTotal: o.grandTotal,
         status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered",
         date: new Date(o.createdAt).toISOString().split('T')[0],
         trackingId: o.orderNumber
       })));
+
+      // Load payments from API
+      const paymentsResponse = await paymentService.getPayments({ limit: 50 });
+      setTransactions(paymentsResponse.data.map(p => ({
+        id: p.transactionId,
+        type: "Payment" as const,
+        amount: p.amount,
+        date: new Date(p.createdAt).toISOString().split('T')[0],
+        method: p.paymentMethod as "UPI" | "Net Banking" | "Credit" | "Cash",
+        status: p.paymentStatus === "PAID" ? "Success" : p.paymentStatus === "PENDING" ? "Pending" : "Failed" as "Success" | "Pending" | "Failed",
+        orderId: p.orderId?._id
+      })));
+
+      // Load customers from API
+      await loadCustomers();
 
     } catch (error: any) {
       console.error('Failed to load dealer data:', error);
@@ -274,38 +329,87 @@ const Dealer = () => {
     ));
   };
 
-  const placeOrder = () => {
+  const placeOrder = async () => {
     if (orderCart.length === 0) {
       toast.error("Cart is empty");
       return;
     }
 
-    const orderProducts = orderCart.map(item => {
-      const product = stock.find(p => p.id === item.id)!;
-      return { id: product.id, name: product.name, qty: item.qty, price: product.price };
-    });
+    try {
+      // Prepare order items with all required fields
+      const orderItems = orderCart.map(item => {
+        const product = stock.find(p => p.id === item.id)!;
+        const unitPrice = product.price;
+        const quantity = item.qty;
+        const taxRate = 18; // GST 18%
+        const taxAmount = (unitPrice * quantity * taxRate) / 100;
+        const lineTotal = (unitPrice * quantity) + taxAmount;
 
-    const total = orderProducts.reduce((sum, p) => sum + (p.qty * p.price), 0);
-    const gst = Math.round(total * 0.18);
-    const grandTotal = total + gst;
+        return {
+          productId: product.id,
+          productName: typeof product.name === 'string' ? product.name : product.name?.en || 'Product',
+          quantity: quantity,
+          unitPrice: unitPrice,
+          taxRate: taxRate,
+          taxAmount: taxAmount,
+          lineTotal: lineTotal
+        };
+      });
 
-    const newOrder: DealerOrder = {
-      id: `ORD-${Math.floor(2000 + Math.random() * 9000)}`,
-      products: orderProducts,
-      total,
-      gst,
-      grandTotal,
-      status: "Pending",
-      date: new Date().toISOString().slice(0, 10),
-    };
+      // Calculate totals
+      const subtotal = orderItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+      const totalTax = orderItems.reduce((sum, item) => sum + item.taxAmount, 0);
+      const grandTotal = subtotal + totalTax;
 
-    setOrders([newOrder, ...orders]);
-    setOrderCart([]);
-    setOrderDialogOpen(false);
-    toast.success(`Order ${newOrder.id} placed successfully! Total: ${formatINR(grandTotal)}`);
+      // Create order via API
+      const orderData = {
+        orderType: "dealer",
+        items: orderItems,
+        customerName: user?.name || user?.dealerInfo?.businessName || "Dealer",
+        customerPhone: user?.mobile || "9999999999",
+        shippingAddress: {
+          line1: "Dealer Address",
+          city: "Hyderabad",
+          state: "Telangana",
+          pincode: "500001"
+        },
+        subtotal: subtotal,
+        totalTax: totalTax,
+        grandTotal: grandTotal,
+        paymentMethod: "credit_terms",
+        notes: "Dealer bulk order"
+      };
+
+      const response = await orderService.createOrder(orderData);
+
+      // Reload orders to show the new one
+      const ordersResponse = await orderService.getOrders({ limit: 100 });
+      setOrders(ordersResponse.data.map(o => ({
+        id: o._id,
+        products: o.items.map(item => ({
+          id: item.productId?._id || item.productId,
+          name: item.productName || item.productId?.name?.en || 'Product',
+          qty: item.quantity,
+          price: item.unitPrice
+        })),
+        total: o.subtotal,
+        gst: o.totalTax,
+        grandTotal: o.grandTotal,
+        status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered",
+        date: new Date(o.createdAt).toISOString().split('T')[0],
+        trackingId: o.orderNumber
+      })));
+
+      setOrderCart([]);
+      setOrderDialogOpen(false);
+      toast.success(`Order ${response.data.orderNumber} placed successfully! Total: ${formatINR(response.data.grandTotal)}`);
+    } catch (error: any) {
+      console.error('Failed to place order:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to place order');
+    }
   };
 
-  const addCustomer = () => {
+  const addCustomer = async () => {
     if (!newCustomer.name || !newCustomer.phone || !newCustomer.city) {
       toast.error("Name, phone, and city are required");
       return;
@@ -316,20 +420,29 @@ const Dealer = () => {
       return;
     }
 
-    const customer: Customer = {
-      id: `CUST${String(customers.length + 1).padStart(3, '0')}`,
-      ...newCustomer,
-      totalPurchases: 0,
-      warranties: [],
-    };
+    try {
+      const response = await customerService.createCustomer({
+        name: newCustomer.name,
+        mobile: newCustomer.phone,
+        email: newCustomer.email || undefined,
+        address: newCustomer.address || undefined,
+        city: newCustomer.city,
+      });
 
-    setCustomers([customer, ...customers]);
-    setNewCustomer({ name: "", phone: "", email: "", address: "", city: "" });
-    setCustomerDialogOpen(false);
-    toast.success(`Customer ${customer.name} added successfully!`);
+      if (response.success) {
+        // Reload customers from API to ensure we have the latest data
+        await loadCustomers();
+        setNewCustomer({ name: "", phone: "", email: "", address: "", city: "" });
+        setCustomerDialogOpen(false);
+        toast.success(`Customer ${response.data.customer.name} added successfully!`);
+      }
+    } catch (error: any) {
+      console.error("Error adding customer:", error);
+      toast.error(error.response?.data?.message || "Failed to add customer");
+    }
   };
 
-  const addServiceRequest = () => {
+  const addServiceRequest = async () => {
     if (!newServiceRequest.customerId || !newServiceRequest.description) {
       toast.error("Customer and description are required");
       return;
@@ -341,18 +454,51 @@ const Dealer = () => {
       return;
     }
 
-    const request: ServiceRequest = {
-      id: `SR-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerName: customer.name,
-      ...newServiceRequest,
-      status: "Open",
-      date: new Date().toISOString().slice(0, 10),
-    };
+    try {
+      // Map form values to API format
+      const typeMap: Record<string, "complaint" | "warranty" | "query" | "return" | "installation" | "repair"> = {
+        "Complaint": "complaint",
+        "Warranty Claim": "warranty",
+        "Installation": "installation",
+        "Repair": "repair",
+      };
 
-    setServiceRequests([request, ...serviceRequests]);
-    setNewServiceRequest({ customerId: "", type: "Complaint", description: "", priority: "Medium" });
-    setServiceDialogOpen(false);
-    toast.success(`Service request ${request.id} created successfully!`);
+      const priorityMap: Record<string, "low" | "medium" | "high" | "critical"> = {
+        "Low": "low",
+        "Medium": "medium",
+        "High": "high",
+      };
+
+      const response = await ticketService.createTicket({
+        type: typeMap[newServiceRequest.type] || "complaint",
+        subject: `${newServiceRequest.type} - ${customer.name}`,
+        description: newServiceRequest.description,
+        priority: priorityMap[newServiceRequest.priority] || "medium",
+        customerId: newServiceRequest.customerId, // Pass the actual customer ID
+      });
+
+      if (response.success) {
+        // Add the new service request to the local list
+        const newRequest: ServiceRequest = {
+          id: response.data.ticketNumber,
+          customerId: newServiceRequest.customerId,
+          customerName: customer.name,
+          type: newServiceRequest.type,
+          description: newServiceRequest.description,
+          priority: newServiceRequest.priority,
+          status: response.data.status === "open" ? "Open" : "Closed",
+          date: new Date().toISOString().slice(0, 10),
+        };
+
+        setServiceRequests([newRequest, ...serviceRequests]);
+        setNewServiceRequest({ customerId: "", type: "Complaint" as const, description: "", priority: "Medium" as const });
+        setServiceDialogOpen(false);
+        toast.success("Service request created successfully!");
+      }
+    } catch (error: any) {
+      console.error("Error creating service request:", error);
+      toast.error(error.response?.data?.message || "Failed to create service request");
+    }
   };
 
   const makePayment = () => {
@@ -403,7 +549,7 @@ const Dealer = () => {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Dealer Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {user?.name || "Dealer Portal"} • Code: {user?.code || "DLR001"}
+              {user?.name || "Dealer Portal"} • Code: {user?.code || "N/A"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1610,16 +1756,31 @@ const CRMTab = ({
                     <Select
                       value={newServiceRequest.customerId}
                       onValueChange={(v) => setNewServiceRequest({ ...newServiceRequest, customerId: v })}
+                      onOpenChange={(open) => {
+                        if (open && customers.length === 0) {
+                          console.log('Dropdown opened, loading customers...');
+                          loadCustomers();
+                        }
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select customer" />
                       </SelectTrigger>
                       <SelectContent>
-                        {customers.map((customer: any) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            {customer.name} - {customer.phone}
-                          </SelectItem>
-                        ))}
+                        {customers.length === 0 ? (
+                          <div className="p-2 text-sm text-muted-foreground text-center">
+                            No customers found. Add a customer first.
+                          </div>
+                        ) : (
+                          <>
+                            {console.log('Rendering customers in dropdown:', customers.length)}
+                            {customers.map((customer: any) => (
+                              <SelectItem key={customer.id} value={customer.id}>
+                                {customer.name} - {customer.phone}
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

@@ -31,7 +31,7 @@ import { orderService } from "@/services/order.service";
 import { inventoryService } from "@/services/inventory.service";
 import { ticketService } from "@/services/ticket.service";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { EmployeeRole, ROLE_PERMISSIONS, EMPLOYEE_CREDENTIALS } from "@/contexts/AuthContext";
+import { EmployeeRole, ROLE_PERMISSIONS } from "@/contexts/AuthContext";
 
 type Section = "dashboard" | "menu" | "stock" | "dealers" | "media" | "orders" | "finance" | "support" | "marketing" | "users" | "employees" | "reports";
 
@@ -232,20 +232,9 @@ const Admin = () => {
         })) || []
       })));
 
-      // Initialize employees from credentials
-      setEmployees(EMPLOYEE_CREDENTIALS.map((emp, idx) => ({
-        id: `EMP${String(idx + 1).padStart(3, '0')}`,
-        employeeId: emp.employeeId,
-        name: emp.name,
-        email: emp.email,
-        phone: emp.phone,
-        role: emp.employeeRole === "production" ? "Production Team" : emp.employeeRole === "sales" ? "Sales & Marketing Team" : "Service Technicians",
-        employeeRole: emp.employeeRole,
-        permissions: ROLE_PERMISSIONS[emp.employeeRole],
-        status: "Active",
-        password: emp.password,
-        createdDate: "2026-05-01",
-      })));
+      // TODO: Fetch employees from API
+      // For now, initialize with empty array - employees should be created via API
+      setEmployees([]);
 
     } catch (error: any) {
       console.error('Failed to load data:', error);
@@ -1551,7 +1540,7 @@ const DealersSection = ({ dealers, setDealers }: { dealers: Dealer[]; setDealers
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Dealer Code *</Label>
-              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="DLR001" />
+              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="Enter dealer code" />
             </div>
             <div>
               <Label>Status</Label>

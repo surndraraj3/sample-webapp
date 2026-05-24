@@ -3,7 +3,15 @@ import api from "./api";
 export interface CreatePaymentRequest {
   orderId: string;
   amount: number;
-  paymentMethod: "RAZORPAY" | "COD";
+  paymentMethod:
+    | "upi"
+    | "netbanking"
+    | "card"
+    | "wallet"
+    | "credit"
+    | "cod"
+    | "online";
+  paymentGateway?: "razorpay" | "paytm" | "phonepe" | "manual";
   currency?: string;
 }
 

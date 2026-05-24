@@ -6,9 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Lock, User as UserIcon, ShieldCheck, ArrowLeft, Copy, IdCard } from "lucide-react";
+import { Lock, User as UserIcon, ShieldCheck, ArrowLeft, IdCard } from "lucide-react";
 import { Link } from "react-router-dom";
-import { STAFF_CREDENTIALS, EMPLOYEE_CREDENTIALS, useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 type Mode = "dealer" | "admin" | "employee";
@@ -64,7 +64,8 @@ const StaffLogin = () => {
         return;
       }
       setLoading(true);
-      const res = await staffLogin(username, password);
+      const userType = mode as "dealer" | "admin";
+      const res = await staffLogin(username, password, userType);
       setLoading(false);
       if (res.ok === false) {
         toast.error(res.error);
@@ -79,24 +80,6 @@ const StaffLogin = () => {
       navigate(role === "admin" ? "/admin" : "/dealer");
     }
   };
-
-  const useCred = (u: string, p: string) => {
-    if (mode === "employee") {
-      setEmployeeId(u);
-    } else {
-      setUsername(u);
-    }
-    setPassword(p);
-  };
-
-  const copy = (txt: string) => {
-    navigator.clipboard.writeText(txt);
-    toast.success("Copied");
-  };
-
-  const demoForMode = mode === "employee"
-    ? EMPLOYEE_CREDENTIALS
-    : STAFF_CREDENTIALS.filter((c) => c.role === mode);
 
   return (
     <div className="min-h-screen bg-gradient-soft flex flex-col">
@@ -138,7 +121,7 @@ const StaffLogin = () => {
                               id="employeeId"
                               value={employeeId}
                               onChange={(e) => setEmployeeId(e.target.value)}
-                              placeholder="MS-001"
+                              placeholder="Enter employee ID"
                               className="pl-9 h-11"
                               autoComplete="username"
                             />
@@ -173,7 +156,7 @@ const StaffLogin = () => {
                               id="username"
                               value={username}
                               onChange={(e) => setUsername(e.target.value)}
-                              placeholder={mode === "dealer" ? "DLR001" : "admin"}
+                              placeholder={mode === "dealer" ? "Enter dealer code or username" : "Enter admin username"}
                               className="pl-9 h-11"
                               autoComplete="username"
                             />
@@ -204,76 +187,6 @@ const StaffLogin = () => {
               </Tabs>
             </CardContent>
           </Card>
-
-          {/* Demo credentials panel */}
-          <div className="mt-6 rounded-2xl border border-dashed border-accent/50 bg-accent/5 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="text-xs uppercase tracking-wider font-semibold text-accent">Demo credentials</div>
-                <div className="text-xs text-muted-foreground">For testing • Click a row to autofill</div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {mode === "employee" ? (
-                // Employee credentials
-                EMPLOYEE_CREDENTIALS.map((emp) => (
-                  <button
-                    key={emp.employeeId}
-                    type="button"
-                    onClick={() => useCred(emp.employeeId, emp.password)}
-                    className="w-full text-left rounded-lg border border-border/60 bg-card p-3 hover:border-primary hover:shadow-card transition-smooth"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{emp.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {emp.employeeRole === "production" ? "Production Team" : emp.employeeRole === "sales" ? "Sales & Marketing" : "Service Technician"}
-                        </div>
-                        <div className="font-mono text-xs text-muted-foreground mt-1">
-                          <span className="text-foreground">{emp.employeeId}</span>
-                          <span className="mx-1.5 text-border">•</span>
-                          <span>{emp.password}</span>
-                        </div>
-                      </div>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); copy(`${emp.employeeId} / ${emp.password}`); }}
-                        className="text-muted-foreground hover:text-primary cursor-pointer"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </span>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                // Staff credentials (dealer/admin)
-                demoForMode.map((c) => (
-                  <button
-                    key={c.username}
-                    type="button"
-                    onClick={() => useCred(c.username, c.password)}
-                    className="w-full text-left rounded-lg border border-border/60 bg-card p-3 hover:border-primary hover:shadow-card transition-smooth"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{c.name}</div>
-                        <div className="font-mono text-xs text-muted-foreground mt-0.5">
-                          <span className="text-foreground">{c.username}</span>
-                          <span className="mx-1.5 text-border">•</span>
-                          <span>{c.password}</span>
-                        </div>
-                      </div>
-                      <span
-                        onClick={(e) => { e.stopPropagation(); copy(`${c.username} / ${c.password}`); }}
-                        className="text-muted-foreground hover:text-primary cursor-pointer"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       </main>
     </div>

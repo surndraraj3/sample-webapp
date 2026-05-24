@@ -9,10 +9,12 @@ import { formatINR } from "@/data/products";
 import { useState } from "react";
 import { AuthModal } from "@/components/AuthModal";
 import { toast } from "sonner";
+import { orderService } from "@/services/order.service";
+import { paymentService } from "@/services/payment.service";
 
 const Cart = () => {
-  const { detailed, subtotal, updateQty, remove, placeOrder } = useCart();
-  const { isAuthed } = useAuth();
+  const { detailed, subtotal, updateQty, remove, clear, loading } = useCart();
+  const { isAuthed, user } = useAuth();
   const { t, lang } = useI18n();
   const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
@@ -21,33 +23,122 @@ const Cart = () => {
   const startPayment = async () => {
     if (!isAuthed) { setAuthOpen(true); return; }
     setPaying(true);
-    // Razorpay scaffold — falls back to mock when no key is configured.
-    const RAZORPAY_KEY = (import.meta as any).env?.VITE_RAZORPAY_KEY_ID;
-    if (RAZORPAY_KEY && (window as any).Razorpay) {
-      const rzp = new (window as any).Razorpay({
-        key: RAZORPAY_KEY,
-        amount: subtotal * 100,
-        currency: "INR",
-        name: "MSI Innovations",
-        description: "Order payment",
-        handler: (res: any) => {
-          const order = placeOrder(res.razorpay_payment_id);
-          toast.success(`Payment successful • ${order.id}`);
-          navigate("/profile?tab=orders");
-        },
-        theme: { color: "#1565d8" },
+
+    try {
+      // Prepare order items with all required fields
+      const orderItems = detailed.map(d => {
+        const unitPrice = d.product.price;
+        const quantity = d.qty;
+        const taxRate = 18; // GST 18%
+        const lineTotal = unitPrice * quantity; // Subtotal WITHOUT tax
+        const taxAmount = (lineTotal * taxRate) / 100;
+
+        return {
+          productId: d.product.id,
+          productName: typeof d.product.name === 'string' ? d.product.name : d.product.name?.en || 'Product',
+          quantity: quantity,
+          unitPrice: unitPrice,
+          taxRate: taxRate,
+          taxAmount: taxAmount,
+          lineTotal: lineTotal  // Without tax
+        };
       });
-      rzp.open();
+
+      // Calculate totals
+      const subtotal = orderItems.reduce((sum, item) => sum + item.lineTotal, 0);
+      const totalTax = orderItems.reduce((sum, item) => sum + item.taxAmount, 0);
+      const grandTotal = subtotal + totalTax;
+
+      // Create order via API first
+      const orderData = {
+        orderType: "retail",
+        items: orderItems,
+        customerName: user?.name || "Customer",
+        customerPhone: user?.mobile || "9999999999",
+        shippingAddress: {
+          line1: user?.address || "Customer Address",
+          city: user?.city || "Hyderabad",
+          state: "Telangana",
+          pincode: "500001"
+        },
+        subtotal: subtotal,
+        totalTax: totalTax,
+        grandTotal: grandTotal,
+        paymentMethod: "upi",
+        notes: "Customer order from web"
+      };
+
+      const orderResponse = await orderService.createOrder(orderData);
+      const createdOrder = orderResponse.data.order;  // Fix: order is nested inside data
+
+      // Create payment for the order
+      const paymentResponse = await paymentService.createPayment({
+        orderId: createdOrder._id,
+        amount: createdOrder.grandTotal,
+        paymentMethod: "upi",  // Valid: upi, netbanking, card, wallet, credit, cod
+        paymentGateway: "razorpay"
+      });
+
+      // Razorpay integration
+      const RAZORPAY_KEY = (import.meta as any).env?.VITE_RAZORPAY_KEY_ID;
+      if (RAZORPAY_KEY && (window as any).Razorpay) {
+        const rzp = new (window as any).Razorpay({
+          key: RAZORPAY_KEY,
+          amount: createdOrder.grandTotal * 100,
+          currency: "INR",
+          name: "MSI Innovations",
+          description: `Order ${createdOrder.orderNumber}`,
+          order_id: paymentResponse.data.razorpayOrder?.id,
+          handler: async (res: any) => {
+            try {
+              // Verify payment
+              await paymentService.verifyPayment({
+                transactionId: paymentResponse.data._id,
+                razorpayOrderId: res.razorpay_order_id,
+                razorpayPaymentId: res.razorpay_payment_id,
+                razorpaySignature: res.razorpay_signature
+              });
+              clear();
+              toast.success(`Payment successful • ${createdOrder.orderNumber}`);
+              navigate("/profile?tab=orders");
+            } catch (error) {
+              toast.error("Payment verification failed");
+            }
+          },
+          theme: {
+            color: "#1565d8"
+          },
+        });
+        rzp.open();
+        setPaying(false);
+      } else {
+        // Mock payment for demo
+        await new Promise((r) => setTimeout(r, 900));
+        clear();
+        toast.success(`Payment successful (demo) • ${createdOrder.orderNumber}`);
+        setPaying(false);
+        navigate("/profile?tab=orders");
+      }
+    } catch (error: any) {
+      console.error('Failed to create order:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to place order');
       setPaying(false);
-    } else {
-      // Mock payment
-      await new Promise((r) => setTimeout(r, 900));
-      const order = placeOrder(`MOCK-${Date.now()}`);
-      toast.success(`Payment successful (demo) • ${order.id}`);
-      setPaying(false);
-      navigate("/profile?tab=orders");
     }
   };
+
+  // Show loading state while fetching products
+  if (loading) {
+    return (
+      <SiteLayout>
+        <section className="container py-20 text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-secondary animate-pulse">
+            <ShoppingBag className="h-10 w-10 text-muted-foreground" />
+          </div>
+          <h1 className="text-xl font-semibold">Loading cart...</h1>
+        </section>
+      </SiteLayout>
+    );
+  }
 
   if (detailed.length === 0) {
     return (

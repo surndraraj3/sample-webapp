@@ -66,47 +66,12 @@ export const ROLE_PERMISSIONS: Record<EmployeeRole, Permission[]> = {
   ],
 };
 
-// Demo credentials for staff logins (shown on the staff login screen).
-export const STAFF_CREDENTIALS = [
-  { role: "admin" as Role, username: "admin", password: "admin@123", name: "MSI Admin" },
-  { role: "dealer" as Role, username: "DLR001", password: "dealer@123", name: "Suresh Agro Distributors", code: "DLR001" },
-  { role: "dealer" as Role, username: "DLR002", password: "dealer@123", name: "Krishna Pumps", code: "DLR002" },
-];
-
-// Demo employee credentials
-export const EMPLOYEE_CREDENTIALS = [
-  {
-    employeeId: "MS-001",
-    password: "employee@123",
-    name: "Rajesh Kumar",
-    employeeRole: "production" as EmployeeRole,
-    email: "rajesh@msi.com",
-    phone: "9876501111"
-  },
-  {
-    employeeId: "MS-002",
-    password: "employee@123",
-    name: "Priya Sharma",
-    employeeRole: "sales" as EmployeeRole,
-    email: "priya@msi.com",
-    phone: "9876502222"
-  },
-  {
-    employeeId: "MS-003",
-    password: "employee@123",
-    name: "Anil Reddy",
-    employeeRole: "service" as EmployeeRole,
-    email: "anil@msi.com",
-    phone: "9876503333"
-  },
-];
-
 type Ctx = {
   user: User | null;
   isAuthed: boolean;
   sendOtp: (mobile: string) => Promise<void>;
   verifyOtp: (mobile: string, otp: string) => Promise<boolean>;
-  staffLogin: (username: string, password: string) => Promise<{ ok: true; role: Role } | { ok: false; error: string }>;
+  staffLogin: (username: string, password: string, userType: "dealer" | "admin") => Promise<{ ok: true; role: Role } | { ok: false; error: string }>;
   employeeLogin: (employeeId: string, password: string) => Promise<{ ok: true; employeeRole: EmployeeRole } | { ok: false; error: string }>;
   logout: () => void;
 };
@@ -161,36 +126,67 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const staffLogin = async (
     username: string,
-    password: string
+    password: string,
+    userType: "dealer" | "admin"
   ): Promise<{ ok: true; role: Role } | { ok: false; error: string }> => {
-    await new Promise((r) => setTimeout(r, 350));
-    const match = STAFF_CREDENTIALS.find(
-      (c) => c.username.toLowerCase() === username.trim().toLowerCase() && c.password === password
-    );
-    if (!match) return { ok: false, error: "Invalid username or password" };
-    setUser({ role: match.role, name: match.name, username: match.username, code: match.code });
-    return { ok: true, role: match.role };
+    try {
+      const response = await authService.staffLogin({
+        username,
+        password,
+        userType,
+      });
+
+      if (response.success) {
+        const userData = response.data.user;
+        setUser({
+          role: userData.userType as Role,
+          name: userData.name,
+          username: userData.username,
+          code: userData.dealerCode,
+        });
+        toast.success("Login successful");
+        return { ok: true, role: userData.userType as Role };
+      }
+      return { ok: false, error: "Login failed" };
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error?.message || "Invalid username or password";
+      toast.error(errorMessage);
+      return { ok: false, error: errorMessage };
+    }
   };
 
   const employeeLogin = async (
     employeeId: string,
     password: string
   ): Promise<{ ok: true; employeeRole: EmployeeRole } | { ok: false; error: string }> => {
-    await new Promise((r) => setTimeout(r, 350));
-    const match = EMPLOYEE_CREDENTIALS.find(
-      (c) => c.employeeId.toUpperCase() === employeeId.trim().toUpperCase() && c.password === password
-    );
-    if (!match) return { ok: false, error: "Invalid employee ID or password" };
+    try {
+      const response = await authService.staffLogin({
+        username: employeeId,
+        password,
+        userType: "employee",
+      });
 
-    const permissions = ROLE_PERMISSIONS[match.employeeRole];
-    setUser({
-      role: "employee",
-      name: match.name,
-      employeeId: match.employeeId,
-      employeeRole: match.employeeRole,
-      permissions
-    });
-    return { ok: true, employeeRole: match.employeeRole };
+      if (response.success) {
+        const userData = response.data.user;
+        const employeeInfo = userData.employeeInfo || {};
+        const permissions = ROLE_PERMISSIONS[userData.employeeRole as EmployeeRole] || [];
+
+        setUser({
+          role: "employee",
+          name: userData.name,
+          employeeId: userData.employeeId,
+          employeeRole: userData.employeeRole as EmployeeRole,
+          permissions
+        });
+        toast.success("Login successful");
+        return { ok: true, employeeRole: userData.employeeRole as EmployeeRole };
+      }
+      return { ok: false, error: "Login failed" };
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error?.message || "Invalid employee ID or password";
+      toast.error(errorMessage);
+      return { ok: false, error: errorMessage };
+    }
   };
 
   const logout = async () => {

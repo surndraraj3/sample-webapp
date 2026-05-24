@@ -22,7 +22,7 @@ export interface CreateOrderRequest {
     pincode: string;
     phone: string;
   };
-  paymentMethod: "COD" | "ONLINE" | "CREDIT";
+  paymentMethod: "upi" | "netbanking" | "card" | "wallet" | "credit" | "cod";
   notes?: string;
 }
 
@@ -41,8 +41,8 @@ export interface Order {
     gstAmount: number;
   }>;
   subtotal: number;
-  gstAmount: number;
-  totalAmount: number;
+  totalTax: number;
+  grandTotal: number;
   status: string;
   paymentMethod: string;
   paymentStatus: string;
@@ -70,7 +70,10 @@ export interface OrdersResponse {
 
 export interface OrderResponse {
   success: boolean;
-  data: Order;
+  data: {
+    message: string;
+    order: Order;
+  };
 }
 
 export const orderService = {
