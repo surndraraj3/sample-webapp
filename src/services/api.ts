@@ -37,20 +37,26 @@ api.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem("msi.refreshToken");
-        if (refreshToken) {
-          const { data } = await axios.post(
-            `${API_BASE_URL}/auth/refresh-token`,
-            {
-              refreshToken,
-            },
-          );
-
-          localStorage.setItem("msi.accessToken", data.data.accessToken);
-          localStorage.setItem("msi.refreshToken", data.data.refreshToken);
-
-          originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
-          return api(originalRequest);
+        if (!refreshToken) {
+          // No refresh token available, redirect to login
+          localStorage.removeItem("msi.accessToken");
+          localStorage.removeItem("msi.user");
+          window.location.href = "/";
+          return Promise.reject(error);
         }
+
+        const { data } = await axios.post(
+          `${API_BASE_URL}/auth/refresh-token`,
+          {
+            refreshToken,
+          },
+        );
+
+        localStorage.setItem("msi.accessToken", data.data.accessToken);
+        localStorage.setItem("msi.refreshToken", data.data.refreshToken);
+
+        originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
+        return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, clear tokens and redirect to login
         localStorage.removeItem("msi.accessToken");
@@ -61,6 +67,7 @@ api.interceptors.response.use(
       }
     }
 
+    // For 403 (Forbidden) or other errors, don't logout - just reject
     return Promise.reject(error);
   },
 );

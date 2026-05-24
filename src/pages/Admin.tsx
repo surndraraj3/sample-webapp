@@ -30,6 +30,7 @@ import { dealerService } from "@/services/dealer.service";
 import { orderService } from "@/services/order.service";
 import { inventoryService } from "@/services/inventory.service";
 import { ticketService } from "@/services/ticket.service";
+import invoiceService from "@/services/invoice.service";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { EmployeeRole, ROLE_PERMISSIONS } from "@/contexts/AuthContext";
 
@@ -154,92 +155,194 @@ const Admin = () => {
     loadAllData();
   }, []);
 
-  const loadAllData = async () => {
+  const loadInvoices = async () => {
+    console.log('📋 loadInvoices() called');
     try {
-      setLoading(true);
+      const invoicesResponse = await invoiceService.getInvoices({ limit: 100 });
+      console.log('📋 Invoices API response:', invoicesResponse);
+      console.log('📋 Response has data?', !!invoicesResponse.data);
+      console.log('📋 Is data an array?', Array.isArray(invoicesResponse.data));
 
+      if (invoicesResponse.data && Array.isArray(invoicesResponse.data)) {
+        console.log('📋 Raw invoice count:', invoicesResponse.data.length);
+        const mappedInvoices = invoicesResponse.data.map(inv => ({
+          id: inv._id,
+          orderId: inv.orderId?._id || inv.orderId || inv.orderNumber || '',
+          dealerId: inv.dealerId?._id || inv.dealerId || inv.customerId?._id || inv.customerId || '',
+          dealerName: inv.customerName || inv.dealerId?.businessName || inv.dealerId?.name || inv.customerId?.name || 'Unknown',
+          amount: inv.subtotal || 0,
+          gst: inv.totalTax || 0,
+          total: inv.grandTotal || 0,
+          date: new Date(inv.invoiceDate).toISOString().split('T')[0],
+          status: inv.status === 'draft' ? 'Draft' : inv.status === 'sent' ? 'Sent' : inv.status === 'paid' ? 'Paid' : 'Overdue',
+          dueDate: new Date(inv.dueDate).toISOString().split('T')[0]
+        }));
+        console.log('📋 Mapped invoices:', mappedInvoices);
+        console.log('📋 About to call setInvoices with', mappedInvoices.length, 'items');
+        setInvoices(mappedInvoices);
+        console.log('✅ Invoices state updated successfully:', mappedInvoices.length);
+      } else {
+        console.warn('⚠️ Invoice response data is not an array or is missing');
+        setInvoices([]);
+      }
+    } catch (error) {
+      console.error('❌ Failed to refresh invoices:', error);
+      setInvoices([]);
+    }
+  };
+
+  const loadTickets = async () => {
+    console.log('🎫 loadTickets() called');
+    try {
+      const ticketsResponse = await ticketService.getTickets({ limit: 100 });
+      console.log('🎫 Tickets API response:', ticketsResponse);
+      console.log('🎫 Response has data?', !!ticketsResponse.data);
+      console.log('🎫 Is data an array?', Array.isArray(ticketsResponse.data));
+
+      if (ticketsResponse.data && Array.isArray(ticketsResponse.data)) {
+        console.log('🎫 Raw ticket count:', ticketsResponse.data.length);
+        const mappedTickets = ticketsResponse.data.map(t => ({
+          id: t._id,
+          type: (t.type || t.category) as Ticket['type'],
+          subject: t.subject,
+          description: t.description,
+          status: (t.status.charAt(0).toUpperCase() + t.status.slice(1)) as Ticket['status'],
+          priority: (t.priority.charAt(0).toUpperCase() + t.priority.slice(1)) as Ticket['priority'],
+          date: new Date(t.createdAt).toISOString().split('T')[0],
+          comments: (t.comments || []).map((c: any) => ({
+            by: c.commentBy || c.commentedBy || c.by || 'User',
+            text: c.comment || c.commentText || c.text || '',
+            date: new Date(c.createdAt || c.date || Date.now()).toISOString().split('T')[0]
+          }))
+        }));
+        console.log('🎫 Mapped tickets:', mappedTickets);
+        console.log('🎫 About to call setTickets with', mappedTickets.length, 'items');
+        setTickets(mappedTickets);
+        console.log('✅ Tickets state updated successfully:', mappedTickets.length);
+      } else {
+        console.warn('⚠️ Ticket response data is not an array or is missing');
+        setTickets([]);
+      }
+    } catch (error) {
+      console.error('❌ Failed to refresh tickets:', error);
+      setTickets([]);
+    }
+  };
+
+  const loadAllData = async () => {
+    console.log('🔄 Admin page loading all data...');
+    setLoading(true);
+
+    try {
       // Load products/menu
-      const productsResponse = await productService.getProducts({ limit: 100 });
-      setMenu(productsResponse.data.map(p => ({
-        id: p._id,
-        name: p.name.en,
-        price: p.basePrice,
-        description: p.description.en,
-        stock: p.inventory?.currentStock || 0,
-        category: p.category
-      })));
+      try {
+        const productsResponse = await productService.getProducts({ limit: 100 });
+        setMenu(productsResponse.data.map(p => ({
+          id: p._id,
+          name: p.name.en,
+          price: p.basePrice,
+          description: p.description.en,
+          stock: p.inventory?.currentStock || 0,
+          category: p.category
+        })));
+        console.log('✅ Products loaded');
+      } catch (error) {
+        console.error('❌ Failed to load products:', error);
+        setMenu([]);
+      }
 
       // Load dealers
-      const dealersResponse = await dealerService.getDealers({ limit: 100 });
-      setDealers(dealersResponse.data.map(d => ({
-        id: d._id,
-        code: d.dealerCode,
-        name: d.name,
-        city: d.address?.city || '',
-        phone: d.mobile,
-        email: d.email,
-        status: d.approvalStatus as "Pending" | "Approved" | "Suspended",
-        creditLimit: d.creditLimit,
-        outstanding: d.outstandingAmount || 0,
-        kycStatus: d.kycStatus as "Pending" | "Verified" | "Rejected",
-        joinDate: new Date(d.createdAt).toISOString().split('T')[0],
-        totalOrders: 0,
-        totalRevenue: 0
-      })));
+      try {
+        const dealersResponse = await dealerService.getDealers({ limit: 100 });
+        setDealers(dealersResponse.data.map(d => ({
+          id: d._id,
+          code: d.dealerCode,
+          name: d.name,
+          city: d.address?.city || '',
+          phone: d.mobile,
+          email: d.email,
+          status: d.approvalStatus as "Pending" | "Approved" | "Suspended",
+          creditLimit: d.creditLimit,
+          outstanding: d.outstandingAmount || 0,
+          kycStatus: d.kycStatus as "Pending" | "Verified" | "Rejected",
+          joinDate: new Date(d.createdAt).toISOString().split('T')[0],
+          totalOrders: 0,
+          totalRevenue: 0
+        })));
+        console.log('✅ Dealers loaded');
+      } catch (error) {
+        console.error('❌ Failed to load dealers:', error);
+        setDealers([]);
+      }
 
       // Load orders
-      const ordersResponse = await orderService.getOrders({ limit: 100 });
-      setOrders(ordersResponse.data.map(o => ({
-        id: o._id,
-        dealerId: o.userId,
-        dealerName: 'Dealer',
-        items: o.items.map(item => ({
-          product: item.productId.name?.en || 'Product',
-          qty: item.quantity,
-          price: item.price
-        })),
-        total: o.totalAmount,
-        status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered" | "Rejected",
-        date: new Date(o.createdAt).toISOString().split('T')[0],
-        trackingId: o.orderNumber
-      })));
+      try {
+        console.log('📦 Loading orders for admin...');
+        const ordersResponse = await orderService.getOrders({ limit: 100 });
+        console.log('📦 Orders API response:', ordersResponse);
+        console.log('📦 ordersResponse.data exists?', !!ordersResponse.data);
+        console.log('📦 ordersResponse.data is array?', Array.isArray(ordersResponse.data));
+        console.log('📦 ordersResponse.data length:', ordersResponse.data?.length);
+
+        if (!ordersResponse.data || !Array.isArray(ordersResponse.data)) {
+          console.error('❌ Orders response data is not an array:', ordersResponse);
+          setOrders([]);
+        } else {
+          const mappedOrders = ordersResponse.data.map(o => ({
+            id: o._id,
+            dealerId: o.dealerId?._id || o.customerId?._id || '',
+            dealerName: o.dealerId?.businessName || o.dealerId?.name || o.customerId?.name || 'Unknown',
+            items: o.items.map(item => ({
+              product: item.productName || 'Product',
+              qty: item.quantity,
+              price: item.unitPrice || 0
+            })),
+            total: o.grandTotal || 0,
+            status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered" | "Rejected",
+            date: new Date(o.createdAt).toISOString().split('T')[0],
+            trackingId: o.orderNumber
+          }));
+          console.log('📦 Mapped orders:', mappedOrders);
+          setOrders(mappedOrders);
+          console.log('✅ Orders loaded successfully:', mappedOrders.length);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load orders:', error);
+        setOrders([]);
+      }
 
       // Load inventory
-      const inventoryResponse = await inventoryService.getAllInventory({ limit: 100 });
-      setStock(inventoryResponse.data.map((inv, idx) => ({
-        id: `s${idx}`,
-        product: inv.productId.name?.en || 'Product',
-        qty: inv.currentStock,
-        type: "in" as "in" | "out",
-        date: new Date(inv.lastUpdated).toISOString().split('T')[0],
-        reference: inv._id
-      })));
+      try {
+        const inventoryResponse = await inventoryService.getAllInventory({ limit: 100 });
+        setStock(inventoryResponse.data.map((inv, idx) => ({
+          id: `s${idx}`,
+          product: inv.productId.name?.en || 'Product',
+          qty: inv.currentStock,
+          type: "in" as "in" | "out",
+          date: new Date(inv.lastUpdated).toISOString().split('T')[0],
+          reference: inv._id
+        })));
+        console.log('✅ Inventory loaded');
+      } catch (error) {
+        console.error('❌ Failed to load inventory:', error);
+        setStock([]);
+      }
 
-      // Load tickets
-      const ticketsResponse = await ticketService.getTickets({ limit: 100 });
-      setTickets(ticketsResponse.data.map(t => ({
-        id: t._id,
-        type: t.category as "Complaint" | "Warranty" | "Query" | "Return",
-        subject: t.subject,
-        description: t.description,
-        status: t.status as "Open" | "In Progress" | "Resolved" | "Closed",
-        priority: t.priority as "Low" | "Medium" | "High" | "Critical",
-        date: new Date(t.createdAt).toISOString().split('T')[0],
-        comments: t.comments?.map(c => ({
-          by: c.commentedBy,
-          text: c.comment,
-          date: new Date(c.commentedAt).toISOString().split('T')[0]
-        })) || []
-      })));
+      // Load tickets - now guaranteed to execute even if above sections fail
+      await loadTickets();
+
+      // Load invoices - now guaranteed to execute even if above sections fail
+      await loadInvoices();
 
       // TODO: Fetch employees from API
       // For now, initialize with empty array - employees should be created via API
       setEmployees([]);
 
     } catch (error: any) {
-      console.error('Failed to load data:', error);
-      toast.error('Failed to load some data. Using demo data.');
+      console.error('❌ Unexpected error in loadAllData:', error);
+      toast.error('Failed to load some data.');
     } finally {
+      console.log('✅ Admin page data loading complete');
       setLoading(false);
     }
   };
@@ -952,20 +1055,62 @@ const MenuSection = ({ items, setItems }: { items: MenuItem[]; setItems: (i: Men
   const openCreate = () => { setEditing(null); setForm({ name: "", price: "", description: "" }); setOpen(true); };
   const openEdit = (m: MenuItem) => { setEditing(m); setForm({ name: m.name, price: m.price.toString(), description: m.description || "" }); setOpen(true); };
 
-  const save = () => {
+  const save = async () => {
     if (!form.name.trim() || !form.price) return toast.error("Name and price are required");
     const price = Number(form.price);
-    if (editing) {
-      setItems(items.map(i => i.id === editing.id ? { ...editing, name: form.name, price, description: form.description } : i));
-      toast.success("Menu item updated");
-    } else {
-      setItems([...items, { id: `m${Date.now()}`, name: form.name, price, description: form.description }]);
-      toast.success("Menu item added");
+
+    try {
+      if (editing) {
+        // Update existing product
+        await productService.updateProduct(editing.id, {
+          name: { en: form.name },
+          basePrice: price,
+          description: { en: form.description }
+        });
+        setItems(items.map(i => i.id === editing.id ? { ...editing, name: form.name, price, description: form.description } : i));
+        toast.success("Menu item updated");
+      } else {
+        // Create new product
+        const newProduct = await productService.createProduct({
+          productCode: `PRD${Date.now()}`,
+          sku: `MSI-${Date.now()}`,
+          name: { en: form.name },
+          description: { en: form.description },
+          basePrice: price,
+          dealerPrice: price * 0.85,
+          costPrice: price * 0.70,
+          hsnCode: "84219900",
+          gstRate: 18,
+          category: "General",
+          warrantyPeriod: 12
+        });
+
+        setItems([...items, {
+          id: newProduct.data._id,
+          name: form.name,
+          price,
+          description: form.description,
+          stock: 0
+        }]);
+        toast.success("Menu item added");
+      }
+      setOpen(false);
+    } catch (error: any) {
+      console.error('Failed to save product:', error);
+      toast.error(error.response?.data?.error?.message || "Failed to save product");
     }
-    setOpen(false);
   };
 
-  const remove = (id: string) => { setItems(items.filter(i => i.id !== id)); toast.success("Item removed"); };
+  const remove = async (id: string) => {
+    try {
+      await productService.deleteProduct(id);
+      setItems(items.filter(i => i.id !== id));
+      toast.success("Item removed");
+    } catch (error: any) {
+      console.error('Failed to delete product:', error);
+      toast.error(error.response?.data?.error?.message || "Failed to delete product");
+    }
+  };
 
   return (
     <>
@@ -1020,15 +1165,53 @@ const StockSection = ({ stock, setStock, menu, rawMaterials, setRawMaterials }: 
   const [rawMaterialForm, setRawMaterialForm] = useState({ id: "", name: "", unit: "pcs", quantity: "", minStock: "", supplier: "" });
   const [rmDialog, setRmDialog] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.product || !form.qty) return toast.error("Product and quantity required");
-    setStock([
-      { id: `s${Date.now()}`, product: form.product, qty: Number(form.qty), type: form.type, date: new Date().toISOString().slice(0, 10), note: form.note, reference: form.reference },
-      ...stock,
-    ]);
-    setForm({ product: "", qty: "", type: "in", note: "", reference: "" });
-    toast.success("Stock entry recorded");
+
+    try {
+      // Find the product to get its ID
+      const product = menu.find(m => m.name === form.product);
+      if (!product) return toast.error("Product not found");
+
+      // Update stock via API
+      await inventoryService.updateStock(product.id, {
+        movementType: form.type === "in" ? "add" : "remove",
+        quantity: Number(form.qty),
+        notes: form.note || form.reference
+      });
+
+      // Add to local stock list
+      setStock([
+        { id: `s${Date.now()}`, product: form.product, qty: Number(form.qty), type: form.type, date: new Date().toISOString().slice(0, 10), note: form.note, reference: form.reference },
+        ...stock,
+      ]);
+      setForm({ product: "", qty: "", type: "in", note: "", reference: "" });
+      toast.success("Stock entry recorded");
+
+      // Reload inventory data
+      loadInventoryMovements();
+    } catch (error: any) {
+      console.error('Failed to record stock entry:', error);
+      toast.error(error.response?.data?.error?.message || "Failed to record stock entry");
+    }
+  };
+
+  const loadInventoryMovements = async () => {
+    try {
+      const movements = await inventoryService.getAllStockMovements({ limit: 50 });
+      setStock(movements.data.map(m => ({
+        id: m._id,
+        product: m.productId.name.en,
+        qty: Math.abs(m.quantity),
+        type: m.movementType === 'in' ? 'in' : 'out',
+        date: new Date(m.createdAt).toISOString().slice(0, 10),
+        note: m.notes || '',
+        reference: m._id
+      })));
+    } catch (error) {
+      console.error('Failed to load inventory movements:', error);
+    }
   };
 
   const balance = (product: string) =>
@@ -1067,21 +1250,23 @@ const StockSection = ({ stock, setStock, menu, rawMaterials, setRawMaterials }: 
       <SectionHeader title="Inventory & Production Control" subtitle="Manage finished goods and raw materials" />
 
       {/* Alert for low stock raw materials */}
-      {lowStockMaterials.length > 0 && (
-        <Card className="mb-4 border-orange-200 bg-orange-50 dark:bg-orange-950/20">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
-              <div className="flex-1">
-                <div className="font-medium text-sm text-orange-900 dark:text-orange-100">Low Stock Alert</div>
-                <div className="text-xs text-orange-700 dark:text-orange-300 mt-1">
-                  {lowStockMaterials.length} raw material(s) below minimum stock level: {lowStockMaterials.map(rm => rm.name).join(", ")}
+      {
+        lowStockMaterials.length > 0 && (
+          <Card className="mb-4 border-orange-200 bg-orange-50 dark:bg-orange-950/20">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium text-sm text-orange-900 dark:text-orange-100">Low Stock Alert</div>
+                  <div className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                    {lowStockMaterials.length} raw material(s) below minimum stock level: {lowStockMaterials.map(rm => rm.name).join(", ")}
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )
+      }
 
       <Tabs defaultValue="finished" className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-4">
@@ -1705,49 +1890,81 @@ const DealersSection = ({ dealers, setDealers }: { dealers: Dealer[]; setDealers
 const FinanceSection = ({ invoices, setInvoices, orders, dealers }: {
   invoices: Invoice[]; setInvoices: (i: Invoice[]) => void; orders: Order[]; dealers: Dealer[];
 }) => {
+  console.log('📊 FinanceSection rendering - invoices:', invoices.length, 'orders:', orders.length);
   const [generateDialog, setGenerateDialog] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  const generateInvoice = () => {
+  const generateInvoice = async () => {
     if (!selectedOrder) return;
-    const dealer = dealers.find(d => d.id === selectedOrder.dealerId);
-    if (!dealer) return toast.error("Dealer not found");
 
-    const gst = selectedOrder.total * 0.18; // 18% GST
-    const total = selectedOrder.total + gst;
+    try {
+      // Call API to create invoice
+      const response = await invoiceService.createInvoice({
+        orderId: selectedOrder.id
+      });
 
-    const newInvoice: Invoice = {
-      id: `INV${String(invoices.length + 1).padStart(3, '0')}`,
-      orderId: selectedOrder.id,
-      dealerId: selectedOrder.dealerId,
-      dealerName: selectedOrder.dealerName,
-      amount: selectedOrder.total,
-      gst,
-      total,
-      date: new Date().toISOString().slice(0, 10),
-      status: "Draft",
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    };
+      // Convert API invoice to local format
+      const newInvoice: Invoice = {
+        id: response.data._id,
+        orderId: typeof response.data.orderId === 'object' ? response.data.orderId._id : response.data.orderId,
+        dealerId: typeof response.data.dealerId === 'object' ? response.data.dealerId._id : (response.data.dealerId || ''),
+        dealerName: response.data.customerName,
+        amount: response.data.subtotal,
+        gst: response.data.totalTax,
+        total: response.data.grandTotal,
+        date: new Date(response.data.invoiceDate).toISOString().slice(0, 10),
+        status: response.data.status === 'draft' ? 'Draft' : response.data.status === 'sent' ? 'Sent' : 'Paid',
+        dueDate: new Date(response.data.dueDate).toISOString().slice(0, 10)
+      };
 
-    setInvoices([newInvoice, ...invoices]);
-    toast.success("Invoice generated successfully");
-    setGenerateDialog(false);
-    setSelectedOrder(null);
+      setInvoices([newInvoice, ...invoices]);
+      toast.success(`Invoice ${response.data.invoiceNumber} generated successfully`);
+      setGenerateDialog(false);
+      setSelectedOrder(null);
+
+      // Refresh invoices from server after short delay
+      setTimeout(() => loadInvoices(), 500);
+    } catch (error: any) {
+      console.error('Failed to generate invoice:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to generate invoice');
+    }
   };
 
-  const updateInvoiceStatus = (id: string, status: Invoice["status"]) => {
-    setInvoices(invoices.map(inv => inv.id === id ? { ...inv, status, ...(status === "Paid" ? { paymentDate: new Date().toISOString().slice(0, 10) } : {}) } : inv));
-    toast.success(`Invoice ${status.toLowerCase()}`);
+  const updateInvoiceStatus = async (id: string, status: Invoice["status"]) => {
+    try {
+      // Map frontend status to backend status
+      const backendStatus = status === 'Draft' ? 'draft' : status === 'Sent' ? 'sent' : status === 'Paid' ? 'paid' : 'overdue';
+
+      await invoiceService.updateInvoiceStatus(id, { status: backendStatus });
+
+      setInvoices(invoices.map(inv => inv.id === id ? { ...inv, status, ...(status === "Paid" ? { paymentDate: new Date().toISOString().slice(0, 10) } : {}) } : inv));
+      toast.success(`Invoice ${status.toLowerCase()}`);
+    } catch (error: any) {
+      console.error('Failed to update invoice status:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to update invoice status');
+    }
   };
 
   const totalRevenue = invoices.filter(i => i.status === "Paid").reduce((sum, i) => sum + i.total, 0);
   const pendingAmount = invoices.filter(i => i.status === "Sent" || i.status === "Overdue").reduce((sum, i) => sum + i.total, 0);
   const gstCollected = invoices.filter(i => i.status === "Paid").reduce((sum, i) => sum + i.gst, 0);
 
-  const eligibleOrders = orders.filter(o =>
-    (o.status === "Delivered" || o.status === "Shipped") &&
-    !invoices.some(inv => inv.orderId === o.id)
-  );
+  console.log('🔍 Computing eligibleOrders - orders count:', orders.length, 'invoices count:', invoices.length);
+  console.log('🔍 All orders:', orders.map(o => ({ id: o.id, trackingId: o.trackingId })));
+  console.log('🔍 All invoice orderIds:', invoices.map(inv => ({ id: inv.id, orderId: inv.orderId })));
+
+  const eligibleOrders = orders.filter(o => {
+    const hasInvoice = invoices.some(inv => {
+      const match = inv.orderId === o.id || inv.orderId === o.trackingId;
+      if (match) {
+        console.log('✓ Order', o.id, 'MATCHED with invoice orderId:', inv.orderId);
+      }
+      return match;
+    });
+    console.log('Order', o.id, '(trackingId:', o.trackingId, ') hasInvoice:', hasInvoice);
+    return !hasInvoice;
+  });
+  console.log('🔍 Eligible orders after filter:', eligibleOrders.length, eligibleOrders.map(o => ({ id: o.id, trackingId: o.trackingId })));
 
   return (
     <>
@@ -1895,12 +2112,12 @@ const FinanceSection = ({ invoices, setInvoices, orders, dealers }: {
                 <SelectContent>
                   {eligibleOrders.map(order => (
                     <SelectItem key={order.id} value={order.id}>
-                      {order.id} - {order.dealerName} - {formatINR(order.total)}
+                      {order.trackingId || order.id} - {order.dealerName} - {formatINR(order.total)}
                     </SelectItem>
                   ))}
                   {eligibleOrders.length === 0 && (
                     <div className="p-2 text-sm text-muted-foreground text-center">
-                      No eligible orders
+                      No eligible orders (Total orders: {orders.length}, Invoices: {invoices.length})
                     </div>
                   )}
                 </SelectContent>
@@ -1940,6 +2157,7 @@ const FinanceSection = ({ invoices, setInvoices, orders, dealers }: {
 const SupportSection = ({ tickets, setTickets, dealers }: {
   tickets: Ticket[]; setTickets: (t: Ticket[]) => void; dealers: Dealer[];
 }) => {
+  console.log('🎫 SupportSection rendering - tickets:', tickets.length);
   const [viewTicket, setViewTicket] = useState<Ticket | null>(null);
   const [createDialog, setCreateDialog] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | Ticket["status"]>("all");
@@ -1952,24 +2170,43 @@ const SupportSection = ({ tickets, setTickets, dealers }: {
     status: "Open"
   });
 
-  const createTicket = () => {
+  const createTicket = async () => {
     if (!form.subject || !form.description) return toast.error("Subject and description required");
 
-    const newTicket: Ticket = {
-      id: `TCK${String(tickets.length + 1).padStart(3, '0')}`,
-      type: form.type as Ticket["type"],
-      subject: form.subject,
-      description: form.description,
-      status: "Open",
-      priority: form.priority as Ticket["priority"],
-      date: new Date().toISOString().slice(0, 10),
-      comments: []
-    };
+    try {
+      // Call backend API to create ticket
+      const response = await ticketService.createTicket({
+        type: (form.type?.toLowerCase() || 'complaint') as any,
+        subject: form.subject,
+        description: form.description,
+        priority: (form.priority?.toLowerCase() || 'medium') as any
+      });
 
-    setTickets([newTicket, ...tickets]);
-    toast.success("Ticket created successfully");
-    setCreateDialog(false);
-    setForm({ type: "Complaint", subject: "", description: "", priority: "Medium", status: "Open" });
+      console.log('Ticket created:', response);
+
+      // Add the new ticket to the list
+      const newTicket: Ticket = {
+        id: response.data.ticket._id,
+        type: form.type as Ticket["type"],
+        subject: form.subject,
+        description: form.description,
+        status: "Open",
+        priority: form.priority as Ticket["priority"],
+        date: new Date(response.data.ticket.createdAt).toISOString().slice(0, 10),
+        comments: []
+      };
+
+      setTickets([newTicket, ...tickets]);
+      toast.success(`Ticket ${response.data.ticket.ticketNumber} created successfully`);
+      setCreateDialog(false);
+      setForm({ type: "Complaint", subject: "", description: "", priority: "Medium", status: "Open" });
+
+      // Refresh tickets from server after short delay
+      setTimeout(() => loadTickets(), 500);
+    } catch (error: any) {
+      console.error('Failed to create ticket:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to create ticket');
+    }
   };
 
   const updateTicketStatus = (id: string, status: Ticket["status"]) => {

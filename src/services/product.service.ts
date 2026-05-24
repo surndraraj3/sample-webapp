@@ -94,4 +94,52 @@ export const productService = {
     const response = await api.get("/products/categories");
     return response.data;
   },
+
+  // Create new product (Admin/Employee only)
+  createProduct: async (data: {
+    productCode: string;
+    sku: string;
+    name: { en: string; te?: string; hi?: string };
+    description?: { en?: string; te?: string; hi?: string };
+    basePrice: number;
+    dealerPrice: number;
+    costPrice: number;
+    hsnCode: string;
+    gstRate: number;
+    category: string;
+    subCategory?: string;
+    warrantyPeriod?: number;
+    images?: string[];
+    specifications?: Array<{ key: string; value: string }>;
+  }): Promise<ProductResponse> => {
+    const response = await api.post("/products", data);
+    return response.data;
+  },
+
+  // Update product (Admin/Employee only)
+  updateProduct: async (
+    id: string,
+    data: Partial<{
+      name: { en: string; te?: string; hi?: string };
+      description: { en?: string; te?: string; hi?: string };
+      basePrice: number;
+      dealerPrice: number;
+      costPrice: number;
+      category: string;
+      subCategory: string;
+      isActive: boolean;
+      isFeatured: boolean;
+    }>,
+  ): Promise<ProductResponse> => {
+    const response = await api.put(`/products/${id}`, data);
+    return response.data;
+  },
+
+  // Delete product (Admin only)
+  deleteProduct: async (
+    id: string,
+  ): Promise<{ success: boolean; message: string }> => {
+    const response = await api.delete(`/products/${id}`);
+    return response.data;
+  },
 };

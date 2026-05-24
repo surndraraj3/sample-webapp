@@ -94,24 +94,42 @@ export const inventoryService = {
       notes?: string;
     },
   ): Promise<InventoryResponse> => {
-    const response = await api.put(`/inventory/${productId}/stock`, data);
+    // Map movementType to 'type' for the API
+    const response = await api.put(`/inventory/${productId}/stock`, {
+      type: data.movementType,
+      quantity: data.quantity,
+      notes: data.notes,
+    });
+    return response.data;
+  },
+
+  // Get stock movements/history
+  getStockMovements: async (
+    productId: string,
+    params?: {
+      page?: number;
+      limit?: number;
+      movementType?: string;
+    },
+  ): Promise<StockMovementsResponse> => {
+    const response = await api.get(`/inventory/${productId}/movements`, {
+      params,
+    });
+    return response.data;
+  },
+
+  // Get all stock movements across all products
+  getAllStockMovements: async (params?: {
+    page?: number;
+    limit?: number;
+  }): Promise<StockMovementsResponse> => {
+    const response = await api.get("/inventory/movements", { params });
     return response.data;
   },
 
   // Get low stock products
   getLowStockProducts: async (): Promise<InventoriesResponse> => {
     const response = await api.get("/inventory/alerts/low-stock");
-    return response.data;
-  },
-
-  // Get stock movements
-  getStockMovements: async (
-    productId: string,
-    params?: { page?: number; limit?: number },
-  ): Promise<StockMovementsResponse> => {
-    const response = await api.get(`/inventory/${productId}/movements`, {
-      params,
-    });
     return response.data;
   },
 };

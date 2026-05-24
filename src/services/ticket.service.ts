@@ -20,6 +20,7 @@ export interface CreateTicketRequest {
 export interface Ticket {
   _id: string;
   ticketNumber: string;
+  type: string; // complaint, warranty, query, return, installation, repair
   customerId: {
     _id: string;
     name: string;
@@ -28,7 +29,6 @@ export interface Ticket {
   subject: string;
   description: string;
   priority: string;
-  category: string;
   status: string;
   assignedTo?: {
     _id: string;
@@ -40,9 +40,12 @@ export interface Ticket {
   resolvedAt?: string;
   resolutionTime?: number;
   comments: Array<{
-    commentBy: string;
-    commentByName: string;
-    commentText: string;
+    commentBy?: string;
+    commentByName?: string;
+    commentText?: string;
+    comment?: string;
+    commentedBy?: string;
+    commentedAt?: string;
     isInternal: boolean;
     createdAt: string;
   }>;
