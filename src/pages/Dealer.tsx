@@ -256,22 +256,44 @@ const Dealer = () => {
       })));
 
       // Load orders from API
-      const ordersResponse = await orderService.getOrders({ limit: 100 });
-      setOrders(ordersResponse.data.map(o => ({
-        id: o._id,
-        products: o.items.map(item => ({
-          id: item.productId?._id || item.productId,
-          name: item.productName || item.productId?.name?.en || 'Product',
-          qty: item.quantity,
-          price: item.unitPrice
-        })),
-        total: o.subtotal,
-        gst: o.totalTax,
-        grandTotal: o.grandTotal,
-        status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered",
-        date: new Date(o.createdAt).toISOString().split('T')[0],
-        trackingId: o.orderNumber
-      })));
+      console.log('Loading orders for dealer...');
+      try {
+        const ordersResponse = await orderService.getOrders({ limit: 100 });
+        console.log('Orders API response:', ordersResponse);
+        console.log('Orders data:', ordersResponse.data);
+        console.log('Orders count:', ordersResponse.data?.length || 0);
+
+        if (ordersResponse.data && ordersResponse.data.length > 0) {
+          const mappedOrders = ordersResponse.data.map(o => {
+            console.log('Mapping order:', o._id, 'items:', o.items);
+            return {
+              id: o._id,
+              products: o.items.map(item => ({
+                id: item.productId?._id || item.productId,
+                name: item.productName || 'Product',
+                qty: item.quantity,
+                price: item.unitPrice
+              })),
+              total: o.subtotal,
+              gst: o.totalTax,
+              grandTotal: o.grandTotal,
+              status: o.status as "Pending" | "Approved" | "Shipped" | "Delivered",
+              date: new Date(o.createdAt).toISOString().split('T')[0],
+              trackingId: o.orderNumber
+            };
+          });
+          setOrders(mappedOrders);
+          console.log('Orders loaded and set:', mappedOrders.length);
+        } else {
+          console.log('No orders returned from API');
+          setOrders([]);
+        }
+      } catch (error: any) {
+        console.error('Failed to load orders:', error);
+        console.error('Order error details:', error.response?.data);
+        toast.error('Failed to load orders');
+        setOrders([]);
+      }
 
       // Load payments from API
       const paymentsResponse = await paymentService.getPayments({ limit: 50 });

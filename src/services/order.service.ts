@@ -29,16 +29,16 @@ export interface CreateOrderRequest {
 export interface Order {
   _id: string;
   orderNumber: string;
-  userId: string;
+  userId?: string;
+  customerId?: string;
+  dealerId?: string;
   items: Array<{
-    productId: {
-      _id: string;
-      name: { en: string; te: string; hi: string };
-      images: string[];
-    };
+    productId: any; // Can be ObjectId string or populated object
+    productName: string;
     quantity: number;
-    price: number;
-    gstAmount: number;
+    unitPrice: number;
+    taxAmount: number;
+    lineTotal: number;
   }>;
   subtotal: number;
   totalTax: number;
@@ -48,7 +48,7 @@ export interface Order {
   paymentStatus: string;
   shippingAddress: any;
   billingAddress: any;
-  statusHistory: Array<{
+  statusHistory?: Array<{
     status: string;
     timestamp: string;
     updatedBy: string;
